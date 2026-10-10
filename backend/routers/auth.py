@@ -8,13 +8,20 @@ router = APIRouter(tags=["Auth & Users"])
 @router.post("/register")
 async def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     if db.query(models.User).filter(models.User.email == user.email).first(): raise HTTPException(400, "Email đã tồn tại!")
-    final_role = f"pending_{user.role}" if user.role.startswith("driver") else user.role
+    if user.phone and db.query(models.User).filter(models.User.phone == user.phone).first(): raise HTTPException(400, "Số điện thoại đã tồn tại!")
+    is_driver = user.role.startswith("driver")
+    license_plate = (user.license_plate or "").strip().upper()
+    if is_driver:
+        if not license_plate: raise HTTPException(400, "Vui lòng nhập biển số phương tiện!")
+        if db.query(models.Vehicle).filter(models.Vehicle.license_plate == license_plate).first(): raise HTTPException(400, "Biển số đã tồn tại!")
+    final_role = f"pending_{user.role}" if is_driver else user.role
     new_user = models.User(name=user.name, email=user.email, password_hash=pwd_context.hash(user.password), role=final_role, phone=user.phone, is_active=True)
     db.add(new_user); db.commit(); db.refresh(new_user)
-    if user.role.startswith("driver"):
+    if is_driver:
         new_dp = models.DriverProfile(user_id=new_user.id)
         db.add(new_dp); db.commit(); db.refresh(new_dp)
-        db.add(models.Vehicle(driver_id=new_dp.id, type="motorcycle" if "express" in user.role else "container", license_plate=user.license_plate)); db.commit()
+        vehicle_type = "motorcycle" if "express" in user.role else "truck" if "truck" in user.role else "container"
+        db.add(models.Vehicle(driver_id=new_dp.id, type=vehicle_type, license_plate=license_plate)); db.commit()
     await manager.broadcast(json.dumps({"event": "user_registered"}))
     return {"message": "Thành công!", "user_id": new_user.id}
 

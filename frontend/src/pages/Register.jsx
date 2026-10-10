@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_URL } from '../config';
 
 function Register() {
   const [name, setName] = useState('');
@@ -19,7 +20,7 @@ function Register() {
     setMessage('');
     
     try {
-      await axios.post('https://datquang-backend.onrender.com/register', {
+      await axios.post(`${API_URL}/register`, {
         name: name, email: email, password: password, role: role, phone: phone,
         license_plate: role.startsWith('driver') ? licensePlate : null 
       });

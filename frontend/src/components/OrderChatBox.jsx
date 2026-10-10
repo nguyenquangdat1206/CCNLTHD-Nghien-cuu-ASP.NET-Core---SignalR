@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Badge, Form, InputGroup, Button } from 'react-bootstrap';
 import axios from 'axios';
+import { API_URL } from '../config';
 
 export default function OrderChatBox({ orderId, userInfo, isChatDisabled, isBatchClosed, messages, fetchMessages }) {
   const [chatInput, setChatInput] = useState('');
@@ -12,7 +13,7 @@ export default function OrderChatBox({ orderId, userInfo, isChatDisabled, isBatc
     e.preventDefault();
     if (!chatInput.trim()) return;
     try {
-      await axios.post(`https://datquang-backend.onrender.com/orders/${orderId}/messages`, { sender_id: userInfo.user_id, content: chatInput });
+      await axios.post(`${API_URL}/orders/${orderId}/messages`, { sender_id: userInfo.user_id, content: chatInput });
       setChatInput(''); 
       fetchMessages();
     } catch (error) { console.error("Lỗi gửi tin nhắn", error); }

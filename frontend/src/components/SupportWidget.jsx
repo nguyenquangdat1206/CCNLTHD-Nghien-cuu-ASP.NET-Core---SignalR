@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Button, Form, InputGroup } from 'react-bootstrap';
 import axios from 'axios';
+import { API_URL } from '../config';
+import { subscribeRealtime } from '../realtime';
 
 export default function SupportWidget({ userInfo }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -10,7 +12,7 @@ export default function SupportWidget({ userInfo }) {
 
   const fetchMessages = async () => {
     try {
-      const res = await axios.get(`https://datquang-backend.onrender.com/support/${userInfo.user_id}/messages`);
+      const res = await axios.get(`${API_URL}/support/${userInfo.user_id}/messages`);
       setMessages(res.data);
     } catch (error) { console.error(error); }
   };
@@ -19,19 +21,16 @@ export default function SupportWidget({ userInfo }) {
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, isOpen]);
 
   useEffect(() => {
-    const ws = new WebSocket(`wss://datquang-backend.onrender.com/ws/${userInfo.user_id}/${userInfo.role}`);
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    return subscribeRealtime(userInfo, (data) => {
       if (data.event === 'new_support_msg' && isOpen) fetchMessages();
-    };
-    return () => ws.close();
-  }, [isOpen, userInfo]);
+    });
+  }, [isOpen, userInfo.user_id, userInfo.role]);
 
   const handleSend = async (e) => {
     e.preventDefault();
     if (!inputText.trim()) return;
     try {
-      await axios.post('https://datquang-backend.onrender.com/support/messages', { user_id: userInfo.user_id, sender_type: "user", content: inputText });
+      await axios.post(`${API_URL}/support/messages`, { user_id: userInfo.user_id, sender_type: "user", content: inputText });
       setInputText(''); fetchMessages();
     } catch (error) {}
   };

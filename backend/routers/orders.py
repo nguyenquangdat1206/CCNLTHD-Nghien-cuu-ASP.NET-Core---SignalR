@@ -248,6 +248,8 @@ def get_order_details(order_id: int, db: Session = Depends(get_db)):
     order_data["dropoff_location"] = dropoff.address_text if dropoff else ""
     order_data["price"] = order.final_price; order_data["status"] = order.current_status
     order_data["batch_id"] = order.batch_id; order_data["payment_method"] = order.payment_method; order_data["cod_amount"] = order.cod_amount
+    order_data["rating"] = review.rating if review else None
+    order_data["feedback"] = review.feedback if review else None
     
     # [MỚI] TRẢ VỀ THÔNG TIN LIÊN LẠC (LẤY TỪ ORDER, NẾU KHÔNG CÓ THÌ LẤY TỪ KHÁCH)
     order_data["sender_name"] = order.sender_name or customer.name
@@ -298,8 +300,15 @@ def get_order_messages(order_id: int, db: Session = Depends(get_db)):
 @router.post("/orders/{order_id}/review")
 async def submit_order_review(order_id: int, review: schemas.OrderReview, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order: raise HTTPException(404, "Order not found")
+    if not order.driver_id: raise HTTPException(400, "Đơn chưa có tài xế để đánh giá!")
+    if not 1 <= review.rating <= 5: raise HTTPException(400, "Số sao không hợp lệ!")
+    if db.query(models.Review).filter(models.Review.order_id == order_id).first(): raise HTTPException(400, "Đơn này đã được đánh giá!")
     db.add(models.Review(order_id=order.id, reviewer_id=current_user["user_id"], reviewee_id=order.driver_id, rating=review.rating, feedback=review.feedback))
     db.commit()
-    try: await manager.broadcast(json.dumps({"event": "status_changed"}))
+    try:
+        await manager.broadcast(json.dumps({"event": "status_changed"}))
+        if review.rating == 1:
+            await manager.broadcast(json.dumps({"event": "bad_review_alert", "driver_id": order.driver_id, "order_id": order.id, "feedback": review.feedback or ""}))
     except: pass
     return {"message": "Đánh giá thành công!"}

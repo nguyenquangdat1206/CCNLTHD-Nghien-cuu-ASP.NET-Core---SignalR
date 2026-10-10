@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Container, Card, Button, Table, Badge, Row, Col, Alert, Placeholder } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_URL } from '../config';
 
 function DriverProfileAdmin() {
   const { id } = useParams();
@@ -19,7 +20,7 @@ function DriverProfileAdmin() {
     const fetchDriverProfile = async () => {
       setLoading(true);
       try {
-        const response = await axios.get(`https://datquang-backend.onrender.com/admin/drivers/${id}/profile`);
+        const response = await axios.get(`${API_URL}/admin/drivers/${id}/profile`);
         setDriverInfo(response.data.driver);
         setOrders(response.data.orders);
       } catch (error) { console.error(error); }
@@ -39,8 +40,8 @@ function DriverProfileAdmin() {
     }
 
     try {
-      await axios.put(`https://datquang-backend.onrender.com/admin/users/${id}/toggle_active`, { reason });
-      const response = await axios.get(`https://datquang-backend.onrender.com/admin/drivers/${id}/profile`);
+      await axios.put(`${API_URL}/admin/users/${id}/toggle_active`, { reason });
+      const response = await axios.get(`${API_URL}/admin/drivers/${id}/profile`);
       setDriverInfo(response.data.driver);
     } catch (error) { alert("Lỗi khi thay đổi trạng thái!"); }
   };
