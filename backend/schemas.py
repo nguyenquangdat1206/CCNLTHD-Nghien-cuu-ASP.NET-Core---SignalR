@@ -12,6 +12,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    license_plate: Optional[str] = None
 
 class User(UserBase):
     id: int
