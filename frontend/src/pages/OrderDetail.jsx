@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Container, Card, Row, Col, Badge, Button, Form, Modal, Placeholder, Alert } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_URL } from '../config';
+import { subscribeRealtime } from '../realtime';
 
 import SwipeButton from '../components/SwipeButton';
 import OrderChatBox from '../components/OrderChatBox';
@@ -59,33 +61,10 @@ export default function OrderDetail() {
     };
     initData();
 
-    let ws;
-    let pingInterval;
-    let reconnectTimeout;
-
-    const connectWebSocket = () => {
-      ws = new WebSocket(`wss://datquang-backend.onrender.com/ws/${userInfo.user_id}/${userInfo.role}`);
-      ws.onopen = () => {
-        pingInterval = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping_keep_alive" }));
-        }, 30000);
-      };
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.event === 'new_chat_message' && data.order_id === parseInt(id)) fetchMessages();
-        if (data.event === 'status_changed') fetchOrderDetails();
-      };
-      ws.onclose = () => {
-        clearInterval(pingInterval);
-        reconnectTimeout = setTimeout(connectWebSocket, 3000);
-      };
-    };
-    connectWebSocket();
-    return () => {
-      clearInterval(pingInterval);
-      clearTimeout(reconnectTimeout);
-      if (ws) { ws.onclose = null; ws.close(); }
-    };
+    return subscribeRealtime(userInfo, (data) => {
+      if (data.event === 'new_chat_message' && data.order_id === parseInt(id)) fetchMessages();
+      if (data.event === 'status_changed') fetchOrderDetails();
+    });
   }, [id, userInfo?.user_id, userInfo?.role]);
 
   useEffect(() => {
@@ -96,10 +75,10 @@ export default function OrderDetail() {
 
   const fetchOrderDetails = async () => {
     try {
-      const response = await axios.get(`https://datquang-backend.onrender.com/orders/${id}/details`);
+      const response = await axios.get(`${API_URL}/orders/${id}/details`);
       setOrderDetails(response.data);
       if (response.data.order.batch_id) {
-         const batchRes = await axios.get(`https://datquang-backend.onrender.com/orders/batch/${response.data.order.batch_id}/details`);
+         const batchRes = await axios.get(`${API_URL}/orders/batch/${response.data.order.batch_id}/details`);
          setBatchOrders(batchRes.data);
       } else { setBatchOrders([]); }
     } catch (error) { console.error(error); }
@@ -107,7 +86,7 @@ export default function OrderDetail() {
 
   const fetchMessages = async () => {
     try {
-      const response = await axios.get(`https://datquang-backend.onrender.com/orders/${id}/messages`);
+      const response = await axios.get(`${API_URL}/orders/${id}/messages`);
       setMessages(response.data);
     } catch (error) { console.error("Lỗi tải tin nhắn:", error); }
   };
@@ -115,7 +94,7 @@ export default function OrderDetail() {
   const handleUpdateStatus = async (orderIdToUpdate, newStatus) => {
     setUpdatingOrderId(orderIdToUpdate);
     try {
-      await axios.put(`https://datquang-backend.onrender.com/orders/${orderIdToUpdate}/status?status=${newStatus}`);
+      await axios.put(`${API_URL}/orders/${orderIdToUpdate}/status?status=${newStatus}`);
       await new Promise(resolve => setTimeout(resolve, 800));
       await fetchOrderDetails();
     } catch (error) { console.error("Lỗi cập nhật trạng thái", error); } 
@@ -149,7 +128,7 @@ export default function OrderDetail() {
     e.preventDefault();
     setIsSubmittingReview(true);
     try {
-      await axios.post(`https://datquang-backend.onrender.com/orders/${id}/review`, { rating, feedback });
+      await axios.post(`${API_URL}/orders/${id}/review`, { rating, feedback });
       setShowReviewModal(false); fetchOrderDetails();
     } catch (error) { alert("❌ Có lỗi xảy ra khi gửi đánh giá."); } 
     finally { setIsSubmittingReview(false); }
@@ -162,9 +141,9 @@ export default function OrderDetail() {
     const formData = new FormData(); formData.append("file", podFile);
     try {
       if (podActionType === 'pickup') {
-          await axios.post(`https://datquang-backend.onrender.com/orders/${podTargetId}/pickup_with_pod`, formData, { headers: { 'Content-Type': 'multipart/form-data' }});
+          await axios.post(`${API_URL}/orders/${podTargetId}/pickup_with_pod`, formData, { headers: { 'Content-Type': 'multipart/form-data' }});
       } else {
-          await axios.post(`https://datquang-backend.onrender.com/orders/${podTargetId}/complete_with_pod`, formData, { headers: { 'Content-Type': 'multipart/form-data' }});
+          await axios.post(`${API_URL}/orders/${podTargetId}/complete_with_pod`, formData, { headers: { 'Content-Type': 'multipart/form-data' }});
       }
       setShowPodModal(false); setPodFile(null); fetchOrderDetails();
     } catch (error) { alert("❌ Lỗi khi tải ảnh lên!"); } 
@@ -174,7 +153,7 @@ export default function OrderDetail() {
   const handleCustomerCancel = async () => {
     if(!window.confirm("⚠️ Bạn có muốn gửi yêu cầu Hủy đơn hàng này không?")) return;
     try { 
-      await axios.put(`https://datquang-backend.onrender.com/orders/${id}/status?status=cancel_requested`); 
+      await axios.put(`${API_URL}/orders/${id}/status?status=cancel_requested`); 
       fetchOrderDetails(); alert("Đã gửi yêu cầu hủy đơn!");
     } catch (error) { alert("❌ Không thể gửi yêu cầu lúc này!"); }
   };
@@ -185,7 +164,7 @@ export default function OrderDetail() {
       const renderOrders = batchOrders.length > 0 ? batchOrders : [orderDetails.order];
       for (const o of renderOrders) {
           if (['accepted', 'arrived_pickup'].includes(o.status)) {
-              await axios.put(`https://datquang-backend.onrender.com/orders/${o.id}/driver_cancel`);
+              await axios.put(`${API_URL}/orders/${o.id}/driver_cancel`);
           }
       }
       navigate('/dashboard'); 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_URL } from '../config';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -14,7 +15,7 @@ function Login() {
     setErrorMsg('');
     
     try {
-      const response = await axios.post('https://datquang-backend.onrender.com/login', {
+      const response = await axios.post(`${API_URL}/login`, {
         email: email,
         password: password
       });

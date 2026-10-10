@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Container, Card, Button, Table, Badge, Form, InputGroup, Modal, Alert, Row, Col, Placeholder, ListGroup } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_URL } from '../config';
+import { subscribeRealtime } from '../realtime';
 
 function WalletPage() {
   const navigate = useNavigate();
@@ -25,21 +27,21 @@ function WalletPage() {
 
   const fetchUserInfo = async () => {
     try {
-      const response = await axios.get(`https://datquang-backend.onrender.com/users/${userInfo.user_id}`);
+      const response = await axios.get(`${API_URL}/users/${userInfo.user_id}`);
       setUserBalance(response.data.balance);
     } catch (error) { console.error("Lỗi tải thông tin user"); }
   };
 
   const fetchUsersList = async () => {
     try {
-      const response = await axios.get('https://datquang-backend.onrender.com/admin/users');
+      const response = await axios.get(`${API_URL}/admin/users`);
       setUsersList(response.data);
     } catch (error) { console.error("Lỗi tải danh sách user"); }
   };
 
   const fetchTransactions = async () => {
     try {
-      const response = await axios.get(`https://datquang-backend.onrender.com/users/${userInfo.user_id}/transactions`);
+      const response = await axios.get(`${API_URL}/users/${userInfo.user_id}/transactions`);
       setTransactions(response.data);
     } catch (error) { console.error("Lỗi tải giao dịch"); }
   };
@@ -56,23 +58,20 @@ function WalletPage() {
     };
     initData();
 
-    const ws = new WebSocket(`wss://datquang-backend.onrender.com/ws/${userInfo.user_id}/${userInfo.role}`);
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    return subscribeRealtime(userInfo, (data) => {
       if (data.event === 'balance_changed') {
         fetchUserInfo();
         if (userInfo.role.startsWith('driver')) fetchTransactions();
         if (userInfo.role === 'admin') fetchUsersList();
       }
-    };
-    return () => ws.close();
+    });
   }, [userInfo?.user_id, userInfo?.role]);
 
   const handleTopupSubmit = async (e) => {
     e.preventDefault();
     setIsProcessing(true);
     try {
-      await axios.post(`https://datquang-backend.onrender.com/users/${userInfo.user_id}/topup`, { amount: parseFloat(topupAmount) });
+      await axios.post(`${API_URL}/users/${userInfo.user_id}/topup`, { amount: parseFloat(topupAmount) });
       setActionMessage(`✅ Đã nạp thành công ${parseFloat(topupAmount).toLocaleString()}đ vào ví!`);
       setShowTopupModal(false); setTopupAmount(''); fetchUserInfo(); fetchTransactions();
     } catch (error) { 
@@ -84,7 +83,7 @@ function WalletPage() {
     e.preventDefault();
     setIsProcessing(true);
     try {
-      await axios.post(`https://datquang-backend.onrender.com/users/${userInfo.user_id}/withdraw`, { amount: parseFloat(withdrawAmount) });
+      await axios.post(`${API_URL}/users/${userInfo.user_id}/withdraw`, { amount: parseFloat(withdrawAmount) });
       setActionMessage(`✅ Đã tạo lệnh rút thành công ${parseFloat(withdrawAmount).toLocaleString()}đ về ngân hàng!`);
       setShowWithdrawModal(false); setWithdrawAmount(''); fetchUserInfo(); fetchTransactions();
     } catch (error) { 

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Container, Button, Alert, Badge, Modal, Form, Row, Col, Nav } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_URL } from '../../config';
+import { subscribeRealtime, disconnectRealtime } from '../../realtime';
 import DashboardSkeleton from '../../components/DashboardSkeleton';
 import SupportWidget from '../../components/SupportWidget';
 
@@ -71,10 +73,10 @@ export default function DriverDashboard({ userInfo }) {
   const fetchData = async (isFirstLoad = false) => {
     try {
       const t = new Date().getTime();
-      const resBalance = await axios.get(`https://datquang-backend.onrender.com/users/${userInfo.user_id}?t=${t}`);
+      const resBalance = await axios.get(`${API_URL}/users/${userInfo.user_id}?t=${t}`);
       setUserBalance(resBalance.data.balance);
       
-      const resPending = await axios.get(`https://datquang-backend.onrender.com/orders/pending?t=${t}`);
+      const resPending = await axios.get(`${API_URL}/orders/pending?t=${t}`);
       const newPendingList = resPending.data;
 
       if (!isFirstLoad && isReadyRef.current) {
@@ -108,7 +110,7 @@ export default function DriverDashboard({ userInfo }) {
       prevPendingRef.current = newPendingList;
       setPendingOrders(newPendingList);
 
-      const resMy = await axios.get(`https://datquang-backend.onrender.com/users/${userInfo.user_id}/orders/driver?t=${t}`);
+      const resMy = await axios.get(`${API_URL}/users/${userInfo.user_id}/orders/driver?t=${t}`);
       setMyOrders(resMy.data.order_history); 
     } catch (error) { console.error(error); }
   };
@@ -117,24 +119,20 @@ export default function DriverDashboard({ userInfo }) {
     const init = async () => {
       setLoading(true);
       await fetchData(true);
-      axios.put(`https://datquang-backend.onrender.com/driver/${userInfo.user_id}/toggle_ready?is_ready=${isReady}`).catch(e=>e);
+      axios.put(`${API_URL}/driver/${userInfo.user_id}/toggle_ready?is_ready=${isReady}`).catch(e=>e);
       setTimeout(() => setLoading(false), 600);
     };
     init();
 
-    let ws;
-    const connectWebSocket = () => {
-      ws = new WebSocket(`wss://datquang-backend.onrender.com/ws/${userInfo.user_id}/${userInfo.role}`);
-      ws.onopen = () => console.log("🟢 [Radar Tài xế] Đã kết nối Bất tử!");
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.event === 'user_banned') { stopAlertSound(); localStorage.removeItem('userInfo'); navigate('/'); return; }
-        if (data.event === 'status_changed' || data.event === 'urgent_order_alert') { fetchData(false); }
-      };
-      ws.onclose = () => { setTimeout(connectWebSocket, 3000); };
-    };
-    connectWebSocket();
-    return () => { if (ws) { ws.onclose = null; ws.close(); stopAlertSound(); } };
+    const unsubscribe = subscribeRealtime(userInfo, (data) => {
+      // Sự kiện khóa tài khoản được phát cho mọi người, chỉ đăng xuất đúng người bị khóa
+      if (data.event === 'user_banned') {
+        if (data.user_id === userInfo.user_id) handleLogout();
+        return;
+      }
+      if (data.event === 'status_changed' || data.event === 'urgent_order_alert') { fetchData(false); }
+    });
+    return () => { unsubscribe(); stopAlertSound(); };
   }, [userInfo.user_id, userInfo.role]);
 
   useEffect(() => {
@@ -146,14 +144,14 @@ export default function DriverDashboard({ userInfo }) {
   const handleToggleReady = async () => {
     const newState = !isReady;
     try {
-      await axios.put(`https://datquang-backend.onrender.com/driver/${userInfo.user_id}/toggle_ready?is_ready=${newState}`);
+      await axios.put(`${API_URL}/driver/${userInfo.user_id}/toggle_ready?is_ready=${newState}`);
       setIsReady(newState); localStorage.setItem(`driver_ready_${userInfo.user_id}`, newState); 
     } catch(e) {}
   };
 
   const handleAcceptOrder = async (orderId) => {
     try {
-      await axios.put(`https://datquang-backend.onrender.com/orders/${orderId}/accept?driver_id=${userInfo.user_id}`);
+      await axios.put(`${API_URL}/orders/${orderId}/accept?driver_id=${userInfo.user_id}`);
       setActionMessage(`🎉 Nhận thành công đơn!`); 
       setMainTab('my_trips'); // Tự động chuyển qua tab Chuyến đi của tôi khi nhận đơn
       setDriverTab('active');
@@ -165,11 +163,11 @@ export default function DriverDashboard({ userInfo }) {
     e.preventDefault();
     try {
       let updatedUser = { ...userInfo };
-      const resProfile = await axios.put(`https://datquang-backend.onrender.com/users/${userInfo.user_id}/profile`, profileForm);
+      const resProfile = await axios.put(`${API_URL}/users/${userInfo.user_id}/profile`, profileForm);
       updatedUser = { ...updatedUser, ...resProfile.data };
       if (avatarFile) {
         const formData = new FormData(); formData.append("file", avatarFile);
-        const resAvatar = await axios.post(`https://datquang-backend.onrender.com/users/${userInfo.user_id}/avatar`, formData, { headers: { 'Content-Type': 'multipart/form-data' }});
+        const resAvatar = await axios.post(`${API_URL}/users/${userInfo.user_id}/avatar`, formData, { headers: { 'Content-Type': 'multipart/form-data' }});
         updatedUser.avatar_url = resAvatar.data.avatar_url;
       }
       localStorage.setItem('userInfo', JSON.stringify(updatedUser)); window.location.reload(); 
@@ -177,7 +175,7 @@ export default function DriverDashboard({ userInfo }) {
   };
 
   const stopAlertSound = () => { if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } };
-  const handleLogout = () => { stopAlertSound(); localStorage.removeItem('userInfo'); navigate('/'); };
+  const handleLogout = () => { stopAlertSound(); localStorage.removeItem('userInfo'); disconnectRealtime(); navigate('/'); };
 
   if (loading) return <DashboardSkeleton />;
 

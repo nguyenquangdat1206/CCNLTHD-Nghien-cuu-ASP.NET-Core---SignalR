@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Container, Button, Badge, Modal, Form, Alert, Row, Col } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_URL } from '../../config';
+import { subscribeRealtime, disconnectRealtime } from '../../realtime';
 import DashboardSkeleton from '../../components/DashboardSkeleton';
 import SupportWidget from '../../components/SupportWidget';
 
@@ -18,7 +20,7 @@ export default function CustomerDashboard({ userInfo }) {
   const fetchMyOrders = async () => {
     try {
       const t = new Date().getTime();
-      const response = await axios.get(`https://datquang-backend.onrender.com/users/${userInfo.user_id}/orders/customer?t=${t}`);
+      const response = await axios.get(`${API_URL}/users/${userInfo.user_id}/orders/customer?t=${t}`);
       setMyOrders(response.data);
     } catch (error) { console.error(error); }
   };
@@ -29,18 +31,9 @@ export default function CustomerDashboard({ userInfo }) {
     };
     loadData();
 
-    let ws;
-    const connectWebSocket = () => {
-      ws = new WebSocket(`wss://datquang-backend.onrender.com/ws/${userInfo.user_id}/${userInfo.role}`);
-      ws.onopen = () => console.log("🟢 [Radar Khách] Đã kết nối Bất tử!");
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.event === 'status_changed') fetchMyOrders();
-      };
-      ws.onclose = () => { setTimeout(connectWebSocket, 3000); };
-    };
-    connectWebSocket();
-    return () => { if (ws) { ws.onclose = null; ws.close(); } };
+    return subscribeRealtime(userInfo, (data) => {
+      if (data.event === 'status_changed') fetchMyOrders();
+    });
   }, [userInfo.user_id, userInfo.role]);
 
   useEffect(() => {
@@ -52,18 +45,18 @@ export default function CustomerDashboard({ userInfo }) {
     e.preventDefault();
     try {
       let updatedUser = { ...userInfo };
-      const resProfile = await axios.put(`https://datquang-backend.onrender.com/users/${userInfo.user_id}/profile`, profileForm);
+      const resProfile = await axios.put(`${API_URL}/users/${userInfo.user_id}/profile`, profileForm);
       updatedUser = { ...updatedUser, ...resProfile.data };
       if (avatarFile) {
         const formData = new FormData(); formData.append("file", avatarFile);
-        const resAvatar = await axios.post(`https://datquang-backend.onrender.com/users/${userInfo.user_id}/avatar`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        const resAvatar = await axios.post(`${API_URL}/users/${userInfo.user_id}/avatar`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
         updatedUser.avatar_url = resAvatar.data.avatar_url;
       }
       localStorage.setItem('userInfo', JSON.stringify(updatedUser)); window.location.reload(); 
     } catch (error) { setActionMessage("❌ Lỗi cập nhật hồ sơ!"); }
   };
 
-  const handleLogout = () => { localStorage.removeItem('userInfo'); navigate('/'); };
+  const handleLogout = () => { localStorage.removeItem('userInfo'); disconnectRealtime(); navigate('/'); };
 
   const getStatusBadge = (status) => {
     switch(status) {

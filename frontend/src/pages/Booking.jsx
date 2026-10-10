@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Form, Button, Alert, InputGroup } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_URL } from '../config';
 
 import AddressSearchInput from '../components/AddressSearchInput';
 import BookingMap from '../components/BookingMap';
@@ -85,7 +86,7 @@ export default function Booking() {
       } else if (serviceType === 'truck') {
         calcBase = distance <= 5 ? 150000 : 150000 + (Math.ceil(distance - 5) * 15000);
       } else {
-        calcBase = distance <= 3 ? 16000 : 25000 + Math.ceil(distance - 5) * 6500; 
+        calcBase = distance <= 3 ? 16000 : 25000 + Math.max(0, Math.ceil(distance - 5)) * 6500;
       }
       setBasePrice(Math.ceil(calcBase / 1000) * 1000);
     } else setBasePrice(0);
@@ -134,7 +135,7 @@ export default function Booking() {
   const handleApplyPromo = async () => {
     if (!promoCodeInput.trim()) return;
     try {
-      const response = await axios.post('https://datquang-backend.onrender.com/promotions/apply', { code: promoCodeInput, order_value: totalPrice });
+      const response = await axios.post(`${API_URL}/promotions/apply`, { code: promoCodeInput, order_value: totalPrice });
       setAppliedPromo(response.data);
     } catch (error) { alert("❌ Lỗi mã khuyến mãi!"); setAppliedPromo(null); }
   };
@@ -148,13 +149,13 @@ export default function Booking() {
       const token = userInfo.access_token;
       const getAddrText = (addr, coords) => addr || `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`;
       
-      const pickupRes = await axios.post(`https://datquang-backend.onrender.com/users/${userInfo.user_id}/addresses`, { label: "Điểm lấy", latitude: pickupCoords.lat, longitude: pickupCoords.lng, address_text: getAddrText(pickupAddress, pickupCoords) }, { headers: { Authorization: `Bearer ${token}` } });
-      const dropoffRes = await axios.post(`https://datquang-backend.onrender.com/users/${userInfo.user_id}/addresses`, { label: "Điểm giao", latitude: dropoffCoords.lat, longitude: dropoffCoords.lng, address_text: getAddrText(dropoffAddress, dropoffCoords) }, { headers: { Authorization: `Bearer ${token}` } });
+      const pickupRes = await axios.post(`${API_URL}/users/${userInfo.user_id}/addresses`, { label: "Điểm lấy", latitude: pickupCoords.lat, longitude: pickupCoords.lng, address_text: getAddrText(pickupAddress, pickupCoords) }, { headers: { Authorization: `Bearer ${token}` } });
+      const dropoffRes = await axios.post(`${API_URL}/users/${userInfo.user_id}/addresses`, { label: "Điểm giao", latitude: dropoffCoords.lat, longitude: dropoffCoords.lng, address_text: getAddrText(dropoffAddress, dropoffCoords) }, { headers: { Authorization: `Bearer ${token}` } });
       
       const extraFeesData = { bulky_fee: isBulky ? 20000 : 0, door_delivery_fee: isDoorDelivery ? 10000 : 0, tip: parseInt(tipAmount) || 0 };
-      const finalDetails = `[${serviceType === 'express' ? '🛵 XE MÁY' : serviceType === 'truck' ? '🚚 XE TẢI' : '🚛 CONTAINER'}] ${packageDetails}`;
+      const finalDetails = `[${serviceType === 'express' ? '🛵 XE MÁY - GIAO NHANH' : serviceType === 'truck' ? '🚚 XE TẢI' : '🚛 CONTAINER'}] ${packageDetails}`;
       
-      await axios.post('https://datquang-backend.onrender.com/orders', {
+      await axios.post(`${API_URL}/orders`, {
         customer_id: userInfo.user_id, pickup_address_id: pickupRes.data.id, dropoff_address_id: dropoffRes.data.id,
         promo_id: appliedPromo ? appliedPromo.promo_id : null, discount_amount: appliedPromo ? appliedPromo.discount_amount : 0,                           
         package_details: finalDetails, original_price: basePrice, total_price: Math.max(0, totalPrice - (appliedPromo?.discount_amount || 0)),

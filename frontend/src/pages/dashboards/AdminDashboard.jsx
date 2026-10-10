@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Container, Card, Button, Table, Badge, Row, Col, Nav, Modal, Form, Alert, InputGroup, ListGroup } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_URL } from '../../config';
+import { subscribeRealtime, disconnectRealtime } from '../../realtime';
 import RevenueChart from '../../components/RevenueChart'; 
 import DashboardSkeleton from '../../components/DashboardSkeleton'; 
 
@@ -39,13 +41,13 @@ export default function AdminDashboard({ userInfo }) {
 
   const fetchData = async () => {
     try {
-      const resOrders = await axios.get('https://datquang-backend.onrender.com/admin/orders');
+      const resOrders = await axios.get(`${API_URL}/admin/orders`);
       setMyOrders(resOrders.data);
-      const resUsers = await axios.get('https://datquang-backend.onrender.com/admin/users');
+      const resUsers = await axios.get(`${API_URL}/admin/users`);
       setUsersList(resUsers.data);
-      const resPromos = await axios.get('https://datquang-backend.onrender.com/admin/promotions');
+      const resPromos = await axios.get(`${API_URL}/admin/promotions`);
       setPromotions(resPromos.data);
-      const resSupport = await axios.get('https://datquang-backend.onrender.com/admin/support/users');
+      const resSupport = await axios.get(`${API_URL}/admin/support/users`);
       setSupportUsers(resSupport.data);
 
       const completed = resOrders.data.filter(o => o.status === 'completed');
@@ -69,7 +71,7 @@ export default function AdminDashboard({ userInfo }) {
   const loadSupportChat = async (userId) => {
     setSelectedSupportUserId(userId);
     try {
-      const res = await axios.get(`https://datquang-backend.onrender.com/support/${userId}/messages`);
+      const res = await axios.get(`${API_URL}/support/${userId}/messages`);
       setSupportMessages(res.data);
     } catch(e) {}
   };
@@ -82,50 +84,20 @@ export default function AdminDashboard({ userInfo }) {
     };
     init();
 
-    let ws;
-    let pingInterval;
-    let reconnectTimeout;
-
-    const connectWebSocket = () => {
-      ws = new WebSocket(`wss://datquang-backend.onrender.com/ws/${userInfo.user_id}/${userInfo.role}`);
-
-      ws.onopen = () => {
-        pingInterval = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "ping_keep_alive" }));
-          }
-        }, 30000);
-      };
-
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.event === 'status_changed') fetchData(); 
-        if (data.event === 'bad_review_alert') {
-           alert(`🚨 CẢNH BÁO NGHIÊM TRỌNG:\n\nTài xế #${data.driver_id} vừa bị khách hàng đánh giá 1 SAO ở đơn hàng #${data.order_id}!\n\n💬 Lời nhắn của khách: "${data.feedback}"`);
-        }
-        if (data.event === 'admin_support_alert') {
-            alert(`🎧 CSKH: Người dùng #${data.user_id} đang cần hỗ trợ từ Admin!`);
-            fetchData();
-        }
-        if (data.event === 'new_support_msg') {
-            fetchData(); 
-            if (selectedUserRef.current) loadSupportChat(selectedUserRef.current);
-        }
-      };
-
-      ws.onclose = () => {
-        clearInterval(pingInterval);
-        reconnectTimeout = setTimeout(connectWebSocket, 3000);
-      };
-    };
-
-    connectWebSocket();
-
-    return () => {
-      clearInterval(pingInterval);
-      clearTimeout(reconnectTimeout);
-      if (ws) { ws.onclose = null; ws.close(); }
-    };
+    return subscribeRealtime(userInfo, (data) => {
+      if (data.event === 'status_changed') fetchData();
+      if (data.event === 'bad_review_alert') {
+         alert(`🚨 CẢNH BÁO NGHIÊM TRỌNG:\n\nTài xế #${data.driver_id} vừa bị khách hàng đánh giá 1 SAO ở đơn hàng #${data.order_id}!\n\n💬 Lời nhắn của khách: "${data.feedback}"`);
+      }
+      if (data.event === 'admin_support_alert') {
+          alert(`🎧 CSKH: Người dùng #${data.user_id} đang cần hỗ trợ từ Admin!`);
+          fetchData();
+      }
+      if (data.event === 'new_support_msg') {
+          fetchData();
+          if (selectedUserRef.current) loadSupportChat(selectedUserRef.current);
+      }
+    });
   }, [userInfo.user_id, userInfo.role]);
 
   useEffect(() => { supportEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [supportMessages]);
@@ -133,7 +105,7 @@ export default function AdminDashboard({ userInfo }) {
   const handleCreatePromo = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('https://datquang-backend.onrender.com/admin/promotions', {
+      await axios.post(`${API_URL}/admin/promotions`, {
         ...promoForm,
         code: promoForm.code.toUpperCase(),
         discount_value: parseFloat(promoForm.discount_value),
@@ -153,13 +125,13 @@ export default function AdminDashboard({ userInfo }) {
     e.preventDefault();
     try {
       let updatedUser = { ...userInfo };
-      const resProfile = await axios.put(`https://datquang-backend.onrender.com/users/${userInfo.user_id}/profile`, profileForm);
+      const resProfile = await axios.put(`${API_URL}/users/${userInfo.user_id}/profile`, profileForm);
       updatedUser = { ...updatedUser, ...resProfile.data };
 
       if (avatarFile) {
         const formData = new FormData();
         formData.append("file", avatarFile);
-        const resAvatar = await axios.post(`https://datquang-backend.onrender.com/users/${userInfo.user_id}/avatar`, formData, { headers: { 'Content-Type': 'multipart/form-data' }});
+        const resAvatar = await axios.post(`${API_URL}/users/${userInfo.user_id}/avatar`, formData, { headers: { 'Content-Type': 'multipart/form-data' }});
         updatedUser.avatar_url = resAvatar.data.avatar_url;
       }
       localStorage.setItem('userInfo', JSON.stringify(updatedUser));
@@ -175,40 +147,40 @@ export default function AdminDashboard({ userInfo }) {
     } else {
       if (!window.confirm(`Mở khóa cho tài khoản ${userEmail}?`)) return;
     }
-    try { await axios.put(`https://datquang-backend.onrender.com/admin/users/${userId}/toggle_active`, { reason }); fetchData(); } 
+    try { await axios.put(`${API_URL}/admin/users/${userId}/toggle_active`, { reason }); fetchData(); } 
     catch (error) { setActionMessage("❌ Lỗi khi thay đổi trạng thái!"); }
   };
 
   const handleApproveDriver = async (userId, name) => {
     if (!window.confirm(`Xác nhận DUYỆT hồ sơ tài xế: ${name}?`)) return;
-    try { await axios.put(`https://datquang-backend.onrender.com/admin/users/${userId}/approve_driver`); fetchData(); } catch (e) {}
+    try { await axios.put(`${API_URL}/admin/users/${userId}/approve_driver`); fetchData(); } catch (e) {}
   };
 
   const handleRejectDriver = async (userId, name) => {
     if (!window.confirm(`TỪ CHỐI và xóa hồ sơ tài xế: ${name}?`)) return;
-    try { await axios.delete(`https://datquang-backend.onrender.com/admin/users/${userId}/reject_driver`); fetchData(); } catch (e) {}
+    try { await axios.delete(`${API_URL}/admin/users/${userId}/reject_driver`); fetchData(); } catch (e) {}
   };
 
   const handleAdminApproveCancel = async (orderId) => {
     if (!window.confirm(`Xác nhận ĐỒNG Ý HỦY đơn hàng #${orderId}?`)) return;
-    try { await axios.put(`https://datquang-backend.onrender.com/orders/${orderId}/status?status=cancelled`); setActionMessage(`✅ Đã hủy đơn #${orderId}`); fetchData(); } catch (e) {}
+    try { await axios.put(`${API_URL}/orders/${orderId}/status?status=cancelled`); setActionMessage(`✅ Đã hủy đơn #${orderId}`); fetchData(); } catch (e) {}
   };
 
   const handleAdminRejectCancel = async (orderId) => {
     if (!window.confirm(`Từ chối yêu cầu hủy và đưa đơn #${orderId} về Chờ Tài Xế?`)) return;
-    try { await axios.put(`https://datquang-backend.onrender.com/orders/${orderId}/status?status=pending`); setActionMessage(`ℹ️ Đã từ chối hủy đơn #${orderId}.`); fetchData(); } catch (e) {}
+    try { await axios.put(`${API_URL}/orders/${orderId}/status?status=pending`); setActionMessage(`ℹ️ Đã từ chối hủy đơn #${orderId}.`); fetchData(); } catch (e) {}
   };
 
   const handleSendSupport = async (e) => {
     e.preventDefault();
     if (!supportInput.trim() || !selectedSupportUserId) return;
     try {
-      await axios.post('https://datquang-backend.onrender.com/support/messages', { user_id: selectedSupportUserId, sender_type: "admin", content: supportInput });
+      await axios.post(`${API_URL}/support/messages`, { user_id: selectedSupportUserId, sender_type: "admin", content: supportInput });
       setSupportInput(''); loadSupportChat(selectedSupportUserId);
     } catch(e) {}
   };
 
-  const handleLogout = () => { localStorage.removeItem('userInfo'); navigate('/'); };
+  const handleLogout = () => { localStorage.removeItem('userInfo'); disconnectRealtime(); navigate('/'); };
 
   const getStatusBadge = (status) => {
     switch(status) {
