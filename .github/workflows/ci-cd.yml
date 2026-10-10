@@ -1,0 +1,73 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (lint + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  backend:
+    name: Backend (cài đặt + khởi động thử)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Kiểm tra cú pháp
+        run: python -m compileall -q .
+      - name: Khởi động thử ứng dụng
+        run: |
+          uvicorn main:app --port 8000 &
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:8000/openapi.json > /dev/null && exit 0
+            sleep 1
+          done
+          echo "Backend không khởi động được" && exit 1
+
+  # Frontend do Vercel tự deploy khi main thay đổi.
+  # Backend: gọi Deploy Hook của Render sau khi CI qua (cần secret RENDER_DEPLOY_HOOK_URL).
+  deploy-backend:
+    name: Deploy Backend (Render)
+    needs: [frontend, backend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+    steps:
+      - name: Gọi Render Deploy Hook
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "Chưa cấu hình secret RENDER_DEPLOY_HOOK_URL, bỏ qua bước deploy."
+            exit 0
+          fi
+          curl -sf -X POST "$RENDER_DEPLOY_HOOK_URL" > /dev/null
+          echo "Đã yêu cầu Render deploy bản mới."
