@@ -1,6 +1,6 @@
+// src/realtime.js
 import { WS_URL } from './config';
 
-// Backend chỉ giữ 1 kết nối cho mỗi user_id, nên toàn bộ ứng dụng dùng chung 1 WebSocket
 let socket = null;
 let socketKey = null;
 let pingInterval = null;
@@ -31,18 +31,16 @@ const connect = (key) => {
   };
   ws.onclose = () => {
     clearInterval(pingInterval);
-    // Đã đăng xuất thì không kết nối lại
     if (!localStorage.getItem('userInfo')) { socket = null; socketKey = null; return; }
     reconnectTimeout = setTimeout(() => connect(key), 3000);
   };
 };
 
-// Đăng ký nhận sự kiện real-time, trả về hàm hủy đăng ký
 export const subscribeRealtime = (userInfo, listener) => {
   const key = `${userInfo.user_id}/${userInfo.role}`;
   if (socketKey !== key) connect(key);
   listeners.add(listener);
-  return () => { listeners.delete(listener); };
+  return () => { listeners.delete(listener); }; // Hàm cleanup dùng trong useEffect
 };
 
 export const disconnectRealtime = () => closeSocket();

@@ -52,13 +52,11 @@ export default function AdminDashboard({ userInfo }) {
 
       const completed = resOrders.data.filter(o => o.status === 'completed');
       
-      // LOGIC DOANH THU: Chỉ cộng dồn cước phí gốc
       setAdminTotalRevenue(completed.reduce((sum, o) => {
           const basePrice = parseFloat(o.original_price) || parseFloat(o.price) || 0;
           return sum + basePrice;
       }, 0));
       
-      // SỬA LẠI LOGIC LỢI NHUẬN: Hệ thống chỉ trích 20% doanh thu từ cước phí gốc.
       setAdminPlatformProfit(completed.reduce((sum, o) => {
           const basePrice = parseFloat(o.original_price) || parseFloat(o.price) || 0;
           const profit = basePrice * 0.2; 
@@ -208,7 +206,6 @@ export default function AdminDashboard({ userInfo }) {
     <Container fluid className="py-5" style={{ backgroundColor: 'var(--bg-main)', minHeight: '100vh' }}>
       <Container style={{ maxWidth: '1200px' }}>
         
-        {/* HEADER QUẢN TRỊ VIÊN */}
         <div className="logistics-card p-4 mb-4" style={{ borderTop: '4px solid var(--brand-orange)' }}>
           <div className="d-flex justify-content-between align-items-center flex-wrap">
             <div className="d-flex align-items-center mb-3 mb-md-0">
@@ -233,7 +230,6 @@ export default function AdminDashboard({ userInfo }) {
         {actionMessage && <Alert variant={actionMessage.includes('❌') ? 'danger' : 'success'} className="logistics-card border-0 fw-bold">{actionMessage}</Alert>}
           
         <div>
-            {/* 4 KHỐI THỐNG KÊ */}
             <Row className="mb-4 g-3">
               <Col md={3}>
                 <div className="logistics-card p-4 text-center h-100" style={{ borderBottom: '4px solid var(--text-muted)' }}>
@@ -261,7 +257,6 @@ export default function AdminDashboard({ userInfo }) {
               </Col>
             </Row>
 
-            {/* TAB ĐIỀU HƯỚNG */}
             <div className="logistics-card mb-4 p-2 border-0">
                 <Nav variant="pills" className="justify-content-center gap-2" activeKey={adminTab} onSelect={(k) => setAdminTab(k)}>
                   <Nav.Item>
@@ -279,9 +274,7 @@ export default function AdminDashboard({ userInfo }) {
                 </Nav>
             </div>
 
-            {/* KHUNG NỘI DUNG CHÍNH */}
             <div className="logistics-card p-4" style={{ minHeight: '500px' }}>
-                
                 {adminTab === 'orders' && (
                 <div className="table-responsive">
                     <Table className="align-middle mb-0" style={{ '--bs-table-bg': 'transparent', '--bs-table-color': 'var(--text-main)', '--bs-table-border-color': 'var(--border-color)' }}>
@@ -489,7 +482,6 @@ export default function AdminDashboard({ userInfo }) {
             </div>
         </div>
 
-      {/* MODAL CẬP NHẬT HỒ SƠ */}
       <Modal show={showProfileModal} onHide={() => setShowProfileModal(false)} centered contentClassName="logistics-card border-0">
         <Modal.Header closeButton className="border-bottom" style={{ borderColor: 'var(--border-color)' }}>
             <Modal.Title className="fw-bold text-white">Hồ Sơ Quản Trị Viên</Modal.Title>
@@ -506,7 +498,6 @@ export default function AdminDashboard({ userInfo }) {
         </Form>
       </Modal>
 
-      {/* MODAL KHUYẾN MÃI */}
       <Modal show={showPromoModal} onHide={() => setShowPromoModal(false)} centered contentClassName="logistics-card border-0">
         <Modal.Header closeButton className="border-bottom" style={{ borderColor: 'var(--border-color)' }}><Modal.Title className="fw-bold text-white">🎁 PHÁT HÀNH MÃ MỚI</Modal.Title></Modal.Header>
         <Form onSubmit={handleCreatePromo}>
@@ -515,7 +506,6 @@ export default function AdminDashboard({ userInfo }) {
               <Form.Label className="fw-bold text-muted" style={{ fontSize: '13px' }}>MÃ CODE (IN HOA)</Form.Label>
               <Form.Control type="text" className="logistics-input fs-4 fw-bold text-center text-white" style={{ letterSpacing: '3px', borderColor: 'var(--brand-orange)' }} placeholder="VD: SIEUSALE" value={promoForm.code} onChange={e => setPromoForm({...promoForm, code: e.target.value.toUpperCase()})} required />
             </Form.Group>
-            
             <Row>
               <Col md={6}>
                 <Form.Group className="mb-3">
@@ -533,12 +523,10 @@ export default function AdminDashboard({ userInfo }) {
                 </Form.Group>
               </Col>
             </Row>
-
             <Form.Group className="mb-3">
               <Form.Label className="fw-bold text-muted" style={{ fontSize: '13px' }}>ĐƠN TỐI THIỂU (VNĐ)</Form.Label>
               <Form.Control type="number" className="logistics-input fw-bold text-success" min="0" value={promoForm.min_order_value} onChange={e => setPromoForm({...promoForm, min_order_value: e.target.value})} />
             </Form.Group>
-
             <Form.Group className="mb-2">
               <Form.Label className="fw-bold text-muted" style={{ fontSize: '13px' }}>SỐ LƯỢT SỬ DỤNG</Form.Label>
               <Form.Control type="number" className="logistics-input fw-bold" min="1" value={promoForm.usage_limit} onChange={e => setPromoForm({...promoForm, usage_limit: e.target.value})} />

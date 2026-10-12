@@ -86,7 +86,14 @@ export default function Booking() {
       } else if (serviceType === 'truck') {
         calcBase = distance <= 5 ? 150000 : 150000 + (Math.ceil(distance - 5) * 15000);
       } else {
-        calcBase = distance <= 3 ? 16000 : 25000 + Math.max(0, Math.ceil(distance - 5)) * 6500;
+        // Áp dụng đúng công thức: 3-5km cố định 25.000đ, trên 5km cộng 6.500đ/km
+        if (distance <= 3) {
+            calcBase = 16000;
+        } else if (distance <= 5) {
+            calcBase = 25000;
+        } else {
+            calcBase = 25000 + Math.ceil(distance - 5) * 6500;
+        }
       }
       setBasePrice(Math.ceil(calcBase / 1000) * 1000);
     } else setBasePrice(0);
@@ -153,7 +160,9 @@ export default function Booking() {
       const dropoffRes = await axios.post(`${API_URL}/users/${userInfo.user_id}/addresses`, { label: "Điểm giao", latitude: dropoffCoords.lat, longitude: dropoffCoords.lng, address_text: getAddrText(dropoffAddress, dropoffCoords) }, { headers: { Authorization: `Bearer ${token}` } });
       
       const extraFeesData = { bulky_fee: isBulky ? 20000 : 0, door_delivery_fee: isDoorDelivery ? 10000 : 0, tip: parseInt(tipAmount) || 0 };
-      const finalDetails = `[${serviceType === 'express' ? '🛵 XE MÁY - GIAO NHANH' : serviceType === 'truck' ? '🚚 XE TẢI' : '🚛 CONTAINER'}] ${packageDetails}`;
+      
+      // Áp dụng định dạng tên gói hàng XE MÁY - GIAO NHANH để khớp điều kiện Batching của Backend
+      const finalDetails = `[${serviceType === 'express' ? 'XE MÁY - GIAO NHANH' : serviceType === 'truck' ? 'XE TẢI' : 'CONTAINER'}] ${packageDetails}`;
       
       await axios.post(`${API_URL}/orders`, {
         customer_id: userInfo.user_id, pickup_address_id: pickupRes.data.id, dropoff_address_id: dropoffRes.data.id,
@@ -175,7 +184,6 @@ export default function Booking() {
     <Container fluid className="py-4" style={{ backgroundColor: 'var(--bg-main)', minHeight: '100vh' }}>
       <Container style={{ maxWidth: '1200px' }}>
         
-        {/* THANH ĐIỀU HƯỚNG TRÊN CÙNG GIỐNG ẢNH */}
         <div className="d-flex align-items-center mb-5 pb-3 border-bottom" style={{ borderColor: 'var(--border-color)' }}>
           <div className="d-flex align-items-center me-5">
             <div className="bg-primary text-white rounded me-2 d-flex align-items-center justify-content-center" style={{ width:'40px', height:'40px', backgroundColor: 'var(--brand-orange) !important' }}>🚚</div>
@@ -190,7 +198,6 @@ export default function Booking() {
         {message && <Alert variant={isError ? "danger" : "success"} className="logistics-card border-0 fw-bold">{message}</Alert>}
 
         <Row className="g-5">
-          {/* CỘT TRÁI: FORM ĐẶT HÀNG */}
           <Col lg={6}>
             <p className="text-muted mb-1" style={{fontSize:'14px'}}>Đặt vận chuyển</p>
             <h3 className="text-white fw-bold mb-4">Chọn phương tiện</h3>
@@ -304,7 +311,6 @@ export default function Booking() {
             </Form>
           </Col>
 
-          {/* CỘT PHẢI: BẢN ĐỒ VÀ CHI TIẾT CƯỚC PHÍ */}
           <Col lg={6} className="border-start ps-lg-5" style={{ borderColor: 'var(--border-color) !important' }}>
              <div className="d-flex justify-content-between align-items-end mb-4">
                 <div>
@@ -334,10 +340,8 @@ export default function Booking() {
                 {isDoorDelivery && <div className="d-flex justify-content-between text-muted mb-2"><span>Phí giao tận cửa</span><span className="text-white">10.000đ</span></div>}
                 {(parseInt(tipAmount)>0) && <div className="d-flex justify-content-between text-muted mb-2"><span>Tiền tip bồi dưỡng</span><span className="text-white">{parseInt(tipAmount).toLocaleString()}đ</span></div>}
                 
-                {/* ĐƯỜNG KẺ NGANG ĐỂ TÁCH BIỆT RÕ RÀNG */}
                 <hr className="my-4" style={{borderColor: 'var(--border-color)'}}/>
                 
-                {/* NÚT ÁP DỤNG MÀU CAM NEON NỔI BẬT */}
                 <div className="d-flex gap-3 align-items-center">
                    <Form.Control type="text" className="logistics-input flex-grow-1" placeholder="Nhập mã giảm giá..." value={promoCodeInput} onChange={e=>setPromoCodeInput(e.target.value.toUpperCase())}/>
                    <Button className="btn-orange px-4 py-2 fw-bold" onClick={handleApplyPromo}>ÁP DỤNG</Button>

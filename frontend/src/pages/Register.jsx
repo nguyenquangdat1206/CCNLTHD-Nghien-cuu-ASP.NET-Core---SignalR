@@ -19,6 +19,12 @@ function Register() {
     e.preventDefault();
     setMessage('');
     
+    if (role.startsWith('driver') && !licensePlate.trim()) {
+        setIsError(true);
+        setMessage("❌ Vui lòng nhập biển số phương tiện!");
+        return;
+    }
+    
     try {
       await axios.post(`${API_URL}/register`, {
         name: name, email: email, password: password, role: role, phone: phone,
@@ -40,7 +46,6 @@ function Register() {
     <Container fluid className="d-flex align-items-center justify-content-center py-5" 
                style={{ 
                  minHeight: "100vh", 
-                 // Phủ một lớp màu tối (gradient) lên trên ảnh nền để form đăng ký nổi bật hơn
                  backgroundImage: `linear-gradient(rgba(11, 19, 14, 0.6), rgba(11, 19, 14, 0.8)), url('/bg-login.jpg')`,
                  backgroundSize: 'cover',
                  backgroundPosition: 'center',
@@ -48,13 +53,12 @@ function Register() {
                }}>
       <Row className="w-100">
         <Col md={{ span: 8, offset: 2 }} lg={{ span: 6, offset: 3 }} xl={{ span: 4, offset: 4 }}>
-          {/* Form đăng ký dạng kính mờ (Glassmorphism) trên nền tối */}
           <Card className="border-0 p-3" 
                 style={{ 
                   boxShadow: '0 15px 35px rgba(0,0,0,0.6)', 
-                  backgroundColor: 'rgba(11, 19, 14, 0.75)', // Nền đen trong suốt 75%
-                  backdropFilter: 'blur(10px)', // Hiệu ứng làm mờ cảnh phía sau
-                  border: '1px solid rgba(255, 102, 51, 0.3)', // Viền cam siêu mỏng
+                  backgroundColor: 'rgba(11, 19, 14, 0.75)', 
+                  backdropFilter: 'blur(10px)', 
+                  border: '1px solid rgba(255, 102, 51, 0.3)', 
                   borderRadius: '16px'
                 }}>
             <Card.Body>

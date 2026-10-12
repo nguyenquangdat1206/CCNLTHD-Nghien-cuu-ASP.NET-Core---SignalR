@@ -7,7 +7,6 @@ import { subscribeRealtime, disconnectRealtime } from '../../realtime';
 import DashboardSkeleton from '../../components/DashboardSkeleton';
 import SupportWidget from '../../components/SupportWidget';
 
-// --- BỔ SUNG LEAFLET MAP ---
 import 'leaflet/dist/leaflet.css';
 import { MapContainer, TileLayer, Marker, Circle, Popup } from 'react-leaflet';
 import L from 'leaflet';
@@ -21,7 +20,6 @@ let DefaultIcon = L.icon({
     iconAnchor: [12, 41]
 });
 L.Marker.prototype.options.icon = DefaultIcon;
-// ---------------------------
 
 export default function DriverDashboard({ userInfo }) {
   const navigate = useNavigate();
@@ -31,9 +29,8 @@ export default function DriverDashboard({ userInfo }) {
   const [actionMessage, setActionMessage] = useState('');
   const [userBalance, setUserBalance] = useState(0); 
 
-  // --- STATE ĐIỀU HƯỚNG TABS ---
-  const [mainTab, setMainTab] = useState('radar'); // Tab chính: 'radar' hoặc 'my_trips'
-  const [driverTab, setDriverTab] = useState('active'); // Tab phụ của my_trips: 'active' hoặc 'history'
+  const [mainTab, setMainTab] = useState('radar'); 
+  const [driverTab, setDriverTab] = useState('active'); 
 
   const [driverLocation, setDriverLocation] = useState({ lat: 10.762622, lng: 106.660172 });
 
@@ -125,7 +122,6 @@ export default function DriverDashboard({ userInfo }) {
     init();
 
     const unsubscribe = subscribeRealtime(userInfo, (data) => {
-      // Sự kiện khóa tài khoản được phát cho mọi người, chỉ đăng xuất đúng người bị khóa
       if (data.event === 'user_banned') {
         if (data.user_id === userInfo.user_id) handleLogout();
         return;
@@ -153,7 +149,7 @@ export default function DriverDashboard({ userInfo }) {
     try {
       await axios.put(`${API_URL}/orders/${orderId}/accept?driver_id=${userInfo.user_id}`);
       setActionMessage(`🎉 Nhận thành công đơn!`); 
-      setMainTab('my_trips'); // Tự động chuyển qua tab Chuyến đi của tôi khi nhận đơn
+      setMainTab('my_trips'); 
       setDriverTab('active');
       fetchData(true); 
     } catch (error) { setActionMessage(`❌ Lỗi hoặc đơn đã bị tài xế khác nhận!`); }
@@ -310,7 +306,6 @@ export default function DriverDashboard({ userInfo }) {
     <Container fluid className="py-5" style={{ backgroundColor: 'var(--bg-main)', minHeight: '100vh' }}>
       <Container style={{ maxWidth: '900px' }}>
         
-        {/* HEADER DRIVER */}
         <div className="logistics-card p-4 mb-4 d-flex justify-content-between align-items-center flex-wrap" style={{ borderTop: '4px solid var(--brand-orange)' }}>
           <div className="d-flex align-items-center mb-3 mb-md-0">
             {userInfo.avatar_url ? (
@@ -332,7 +327,6 @@ export default function DriverDashboard({ userInfo }) {
           </div>
         </div>
 
-        {/* CÔNG TẮC TRỰC TUYẾN / NGOẠI TUYẾN */}
         <div className="logistics-card p-4 mb-4 text-center">
             <h6 className="text-muted text-uppercase fw-bold mb-3 tracking-wide" style={{ fontSize: '13px' }}>TRẠNG THÁI HOẠT ĐỘNG</h6>
             <div className="d-flex justify-content-center">
@@ -347,7 +341,6 @@ export default function DriverDashboard({ userInfo }) {
             {!isReady && <small className="text-danger d-block mt-3 fw-bold">Hệ thống phân đơn Radar đang tạm dừng!</small>}
         </div>
 
-        {/* --- TABS ĐIỀU HƯỚNG CHÍNH --- */}
         <div className="logistics-card mb-4 p-2 border-0">
             <Nav variant="pills" className="justify-content-center gap-2" activeKey={mainTab} onSelect={(k) => setMainTab(k)}>
               <Nav.Item>
@@ -362,16 +355,11 @@ export default function DriverDashboard({ userInfo }) {
               </Nav.Item>
             </Nav>
         </div>
-        {/* ----------------------------- */}
         
         {actionMessage && <Alert variant={actionMessage.includes('❌') ? 'danger' : 'success'} className="logistics-card border-0 fw-bold">{actionMessage}</Alert>}
         
-        {/* ========================================= */}
-        {/* TAB 1: BẢN ĐỒ RADAR VÀ ĐƠN HÀNG XUNG QUANH */}
-        {/* ========================================= */}
         {mainTab === 'radar' && (
           <div className="mt-2">
-            {/* BẢN ĐỒ RADAR 1.5KM (Chỉ hiện khi Online) */}
             {isReady && (
               <div className="logistics-card p-3 mb-4" style={{ border: '1px solid var(--border-color)', borderRadius: '16px', overflow: 'hidden' }}>
                 <h6 className="fw-bold text-white mb-3 d-flex align-items-center gap-2">
@@ -386,10 +374,7 @@ export default function DriverDashboard({ userInfo }) {
                     style={{ height: '100%', width: '100%' }}
                     zoomControl={false}
                   >
-                    <TileLayer
-                      url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                      attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-                    />
+                    <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
                     <Marker position={[driverLocation.lat, driverLocation.lng]}>
                       <Popup className="fw-bold text-center text-dark">
                         Vị trí hiện tại của bạn <br/> Đang phát sóng tìm đơn...
@@ -458,9 +443,6 @@ export default function DriverDashboard({ userInfo }) {
           </div>
         )}
 
-        {/* ========================================= */}
-        {/* TAB 2: CHUYẾN ĐI CỦA TÔI (Đang chạy & Lịch sử) */}
-        {/* ========================================= */}
         {mainTab === 'my_trips' && (
           <div className="mt-2">
             <div className="d-flex justify-content-between align-items-center mb-4">
@@ -499,7 +481,6 @@ export default function DriverDashboard({ userInfo }) {
           </div>
         )}
 
-        {/* MODAL CẬP NHẬT HỒ SƠ */}
         <Modal show={showProfileModal} onHide={() => setShowProfileModal(false)} centered contentClassName="logistics-card border-0">
           <Modal.Header closeButton className="border-bottom" style={{borderColor: 'var(--border-color)'}}>
               <Modal.Title className="fw-bold text-white">Hồ Sơ Đối Tác</Modal.Title>
@@ -518,7 +499,6 @@ export default function DriverDashboard({ userInfo }) {
           </Form>
         </Modal>
 
-        {/* MODAL NỔ ĐƠN TOÀN MÀN HÌNH */}
         <Modal show={showIncomingPopup} onHide={() => {}} backdrop="static" centered size="lg" contentClassName="border-0 bg-transparent">
            <div className="p-1 rounded-4 shadow-lg" style={{ background: 'linear-gradient(45deg, #FF4D4D, #FF6633, #4ADE80)', animation: 'pulse-border 1.5s infinite' }}>
              <div className="logistics-card p-4 p-md-5 text-center rounded-4 border-0">
