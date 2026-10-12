@@ -1,10 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Container, Card, Button, Table, Badge, Row, Col, Nav, Modal, Form, Alert, InputGroup, ListGroup } from 'react-bootstrap';
+import { Container, Button, Table, Badge, Row, Col, Nav, Modal, Form, Alert, InputGroup, ListGroup } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL } from '../../config';
-import { subscribeRealtime, disconnectRealtime } from '../../realtime';
-import RevenueChart from '../../components/RevenueChart'; 
 import DashboardSkeleton from '../../components/DashboardSkeleton'; 
 
 export default function AdminDashboard({ userInfo }) {
@@ -34,151 +30,113 @@ export default function AdminDashboard({ userInfo }) {
   const [supportInput, setSupportInput] = useState('');
   const supportEndRef = useRef(null);
 
-  const selectedUserRef = useRef(selectedSupportUserId);
+  // ==========================================
+  // GIẢ LẬP DỮ LIỆU DEMO OFFLINE (Mockup Logic)
+  // ==========================================
   useEffect(() => {
-    selectedUserRef.current = selectedSupportUserId;
-  }, [selectedSupportUserId]);
+    setLoading(true);
+    // Giả lập thời gian load mạng 0.8 giây
+    setTimeout(() => {
+      const fakeOrders = [
+        { id: 101, customer_id: 2, driver_id: 3, price: 65000, status: 'completed' },
+        { id: 102, customer_id: 2, driver_id: null, price: 45000, status: 'pending' },
+        { id: 103, batch_id: 'B-001', customer_id: 4, driver_id: 3, price: 120000, status: 'delivering' },
+        { id: 104, customer_id: 2, driver_id: 3, price: 50000, status: 'cancel_requested' }
+      ];
+      setMyOrders(fakeOrders);
 
-  const fetchData = async () => {
-    try {
-      const resOrders = await axios.get(`${API_URL}/admin/orders`);
-      setMyOrders(resOrders.data);
-      const resUsers = await axios.get(`${API_URL}/admin/users`);
-      setUsersList(resUsers.data);
-      const resPromos = await axios.get(`${API_URL}/admin/promotions`);
-      setPromotions(resPromos.data);
-      const resSupport = await axios.get(`${API_URL}/admin/support/users`);
-      setSupportUsers(resSupport.data);
+      const fakeUsers = [
+        { id: 2, name: 'Khách Hàng Demo', phone: '0909123456', role: 'customer', is_active: true },
+        { id: 3, name: 'Nguyễn Quang Đạt', phone: '0868923294', role: 'driver_express', license_plate: '51H-26439', is_active: true, balance: 500000 },
+        { id: 4, name: 'Trần Tài Xế 2', phone: '0987654321', role: 'driver_truck', license_plate: '59X1-99999', is_active: false, ban_reason: 'Vi phạm', balance: 120000 },
+        { id: 5, name: 'Lê Chờ Duyệt', phone: '0123456789', role: 'pending_driver_express', is_active: true }
+      ];
+      setUsersList(fakeUsers);
 
-      const completed = resOrders.data.filter(o => o.status === 'completed');
-      
-      setAdminTotalRevenue(completed.reduce((sum, o) => {
-          const basePrice = parseFloat(o.original_price) || parseFloat(o.price) || 0;
-          return sum + basePrice;
-      }, 0));
-      
-      setAdminPlatformProfit(completed.reduce((sum, o) => {
-          const basePrice = parseFloat(o.original_price) || parseFloat(o.price) || 0;
-          const profit = basePrice * 0.2; 
-          return sum + profit;
-      }, 0));
+      setPromotions([
+        { id: 1, code: 'ITVINA', discount_type: 'fixed_amount', discount_value: 15000, min_order_value: 0, usage_limit: 100 },
+        { id: 2, code: 'SGU', discount_type: 'percentage', discount_value: 20, min_order_value: 50000, usage_limit: 50 }
+      ]);
 
-    } catch (error) { console.error(error); }
-  };
+      setSupportUsers([ { id: 2, name: 'Khách Hàng Demo' } ]);
 
-  const loadSupportChat = async (userId) => {
+      const completed = fakeOrders.filter(o => o.status === 'completed');
+      const revenue = completed.reduce((sum, o) => sum + o.price, 0);
+      setAdminTotalRevenue(revenue);
+      setAdminPlatformProfit(revenue * 0.2); // Chiết khấu 20%
+
+      setLoading(false);
+    }, 800);
+  }, []);
+
+  const loadSupportChat = (userId) => {
     setSelectedSupportUserId(userId);
-    try {
-      const res = await axios.get(`${API_URL}/support/${userId}/messages`);
-      setSupportMessages(res.data);
-    } catch(e) {}
+    setSupportMessages([
+      { sender_type: 'user', content: 'Admin ơi, cho mình hỏi về phí cồng kềnh.' },
+      { sender_type: 'admin', content: 'Chào bạn, phí cồng kềnh là +20.000đ nhé!' }
+    ]);
   };
-
-  useEffect(() => {
-    const init = async () => {
-      setLoading(true);
-      await fetchData();
-      setTimeout(() => setLoading(false), 500);
-    };
-    init();
-
-    return subscribeRealtime(userInfo, (data) => {
-      if (data.event === 'status_changed') fetchData();
-      if (data.event === 'bad_review_alert') {
-         alert(`🚨 CẢNH BÁO NGHIÊM TRỌNG:\n\nTài xế #${data.driver_id} vừa bị khách hàng đánh giá 1 SAO ở đơn hàng #${data.order_id}!\n\n💬 Lời nhắn của khách: "${data.feedback}"`);
-      }
-      if (data.event === 'admin_support_alert') {
-          alert(`🎧 CSKH: Người dùng #${data.user_id} đang cần hỗ trợ từ Admin!`);
-          fetchData();
-      }
-      if (data.event === 'new_support_msg') {
-          fetchData();
-          if (selectedUserRef.current) loadSupportChat(selectedUserRef.current);
-      }
-    });
-  }, [userInfo.user_id, userInfo.role]);
 
   useEffect(() => { supportEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [supportMessages]);
 
-  const handleCreatePromo = async (e) => {
+  const handleCreatePromo = (e) => {
     e.preventDefault();
-    try {
-      await axios.post(`${API_URL}/admin/promotions`, {
-        ...promoForm,
-        code: promoForm.code.toUpperCase(),
-        discount_value: parseFloat(promoForm.discount_value),
-        min_order_value: parseFloat(promoForm.min_order_value),
-        usage_limit: parseInt(promoForm.usage_limit)
-      });
-      setActionMessage("✅ Tạo mã khuyến mãi thành công!");
-      setShowPromoModal(false);
-      setPromoForm({code: '', discount_value: '', discount_type: 'fixed_amount', min_order_value: 0, usage_limit: 100});
-      fetchData();
-    } catch (error) {
-      setActionMessage("❌ " + (error.response?.data?.detail || "Lỗi tạo mã!"));
-    }
+    setPromotions([{ id: Date.now(), ...promoForm, code: promoForm.code.toUpperCase() }, ...promotions]);
+    setActionMessage("✅ Tạo mã khuyến mãi thành công (Demo)!");
+    setShowPromoModal(false);
+    setPromoForm({code: '', discount_value: '', discount_type: 'fixed_amount', min_order_value: 0, usage_limit: 100});
   };
 
-  const handleUpdateProfile = async (e) => {
+  const handleUpdateProfile = (e) => {
     e.preventDefault();
-    try {
-      let updatedUser = { ...userInfo };
-      const resProfile = await axios.put(`${API_URL}/users/${userInfo.user_id}/profile`, profileForm);
-      updatedUser = { ...updatedUser, ...resProfile.data };
-
-      if (avatarFile) {
-        const formData = new FormData();
-        formData.append("file", avatarFile);
-        const resAvatar = await axios.post(`${API_URL}/users/${userInfo.user_id}/avatar`, formData, { headers: { 'Content-Type': 'multipart/form-data' }});
-        updatedUser.avatar_url = resAvatar.data.avatar_url;
-      }
-      localStorage.setItem('userInfo', JSON.stringify(updatedUser));
-      window.location.reload(); 
-    } catch (error) { setActionMessage("❌ Lỗi cập nhật hồ sơ!"); }
+    setActionMessage("✅ Cập nhật hồ sơ thành công (Demo)!");
+    setShowProfileModal(false);
   };
 
-  const handleToggleUserActive = async (userId, userEmail, currentStatus) => {
+  const handleToggleUserActive = (userId, userEmail, currentStatus) => {
     let reason = "";
     if (currentStatus) {
-      reason = window.prompt(`Khóa tài khoản ${userEmail}.\nNhập lý do:`, "Vi phạm chính sách nền tảng");
+      reason = window.prompt(`Khóa tài khoản ID #${userId}.\nNhập lý do:`, "Vi phạm chính sách nền tảng");
       if (reason === null) return; 
     } else {
-      if (!window.confirm(`Mở khóa cho tài khoản ${userEmail}?`)) return;
+      if (!window.confirm(`Mở khóa cho tài khoản ID #${userId}?`)) return;
     }
-    try { await axios.put(`${API_URL}/admin/users/${userId}/toggle_active`, { reason }); fetchData(); } 
-    catch (error) { setActionMessage("❌ Lỗi khi thay đổi trạng thái!"); }
+    setUsersList(usersList.map(u => u.id === userId ? { ...u, is_active: !currentStatus, ban_reason: reason } : u));
+    setActionMessage(`✅ Đã ${currentStatus ? 'khóa' : 'mở khóa'} tài khoản (Demo)`);
   };
 
-  const handleApproveDriver = async (userId, name) => {
+  const handleApproveDriver = (userId, name) => {
     if (!window.confirm(`Xác nhận DUYỆT hồ sơ tài xế: ${name}?`)) return;
-    try { await axios.put(`${API_URL}/admin/users/${userId}/approve_driver`); fetchData(); } catch (e) {}
+    setUsersList(usersList.map(u => u.id === userId ? { ...u, role: 'driver_express' } : u));
+    setActionMessage(`✅ Đã duyệt tài xế (Demo)`);
   };
 
-  const handleRejectDriver = async (userId, name) => {
+  const handleRejectDriver = (userId, name) => {
     if (!window.confirm(`TỪ CHỐI và xóa hồ sơ tài xế: ${name}?`)) return;
-    try { await axios.delete(`${API_URL}/admin/users/${userId}/reject_driver`); fetchData(); } catch (e) {}
+    setUsersList(usersList.filter(u => u.id !== userId));
+    setActionMessage(`✅ Đã xóa hồ sơ tài xế (Demo)`);
   };
 
-  const handleAdminApproveCancel = async (orderId) => {
+  const handleAdminApproveCancel = (orderId) => {
     if (!window.confirm(`Xác nhận ĐỒNG Ý HỦY đơn hàng #${orderId}?`)) return;
-    try { await axios.put(`${API_URL}/orders/${orderId}/status?status=cancelled`); setActionMessage(`✅ Đã hủy đơn #${orderId}`); fetchData(); } catch (e) {}
+    setMyOrders(myOrders.map(o => o.id === orderId ? { ...o, status: 'cancelled' } : o));
+    setActionMessage(`✅ Đã duyệt hủy đơn #${orderId}`);
   };
 
-  const handleAdminRejectCancel = async (orderId) => {
+  const handleAdminRejectCancel = (orderId) => {
     if (!window.confirm(`Từ chối yêu cầu hủy và đưa đơn #${orderId} về Chờ Tài Xế?`)) return;
-    try { await axios.put(`${API_URL}/orders/${orderId}/status?status=pending`); setActionMessage(`ℹ️ Đã từ chối hủy đơn #${orderId}.`); fetchData(); } catch (e) {}
+    setMyOrders(myOrders.map(o => o.id === orderId ? { ...o, status: 'pending' } : o));
+    setActionMessage(`ℹ️ Đã từ chối hủy đơn #${orderId}.`);
   };
 
-  const handleSendSupport = async (e) => {
+  const handleSendSupport = (e) => {
     e.preventDefault();
     if (!supportInput.trim() || !selectedSupportUserId) return;
-    try {
-      await axios.post(`${API_URL}/support/messages`, { user_id: selectedSupportUserId, sender_type: "admin", content: supportInput });
-      setSupportInput(''); loadSupportChat(selectedSupportUserId);
-    } catch(e) {}
+    setSupportMessages([...supportMessages, { sender_type: 'admin', content: supportInput }]);
+    setSupportInput('');
   };
 
-  const handleLogout = () => { localStorage.removeItem('userInfo'); disconnectRealtime(); navigate('/'); };
+  const handleLogout = () => { localStorage.removeItem('userInfo'); navigate('/login'); };
 
   const getStatusBadge = (status) => {
     switch(status) {
@@ -190,7 +148,6 @@ export default function AdminDashboard({ userInfo }) {
       case 'completed': return <Badge bg="success" className="px-3 py-2">Đã hoàn thành</Badge>;
       case 'cancel_requested': return <Badge bg="danger" className="px-3 py-2 text-uppercase fw-bold border border-white">Yêu cầu hủy</Badge>;
       case 'cancelled': return <Badge bg="dark" className="px-3 py-2 border border-secondary">Đã hủy</Badge>;
-      case 'cancelled_timeout': return <Badge bg="dark" className="px-3 py-2 border border-warning text-warning">Hủy (Quá thời gian)</Badge>;
       default: return <Badge bg="light" className="px-3 py-2 text-dark">{status}</Badge>;
     }
   };
@@ -209,9 +166,7 @@ export default function AdminDashboard({ userInfo }) {
         <div className="logistics-card p-4 mb-4" style={{ borderTop: '4px solid var(--brand-orange)' }}>
           <div className="d-flex justify-content-between align-items-center flex-wrap">
             <div className="d-flex align-items-center mb-3 mb-md-0">
-              {userInfo.avatar_url ? (
-                <img src={userInfo.avatar_url} alt="avatar" style={{width: '70px', height: '70px', borderRadius: '50%', objectFit: 'cover', marginRight: '15px', border: '2px solid var(--brand-orange)'}} />
-              ) : <div style={{width: '70px', height: '70px', borderRadius: '50%', backgroundColor: 'var(--bg-input)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '15px', fontSize: '30px', border: '1px solid var(--border-color)'}}>👑</div>}
+              <div style={{width: '70px', height: '70px', borderRadius: '50%', backgroundColor: 'var(--bg-input)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '15px', fontSize: '30px', border: '1px solid var(--border-color)'}}>👑</div>
               <div>
                 <h4 className="mb-1 fw-bold text-white">Xin chào, {userInfo.name}!</h4>
                 <div className="d-flex gap-2 mt-2">
@@ -357,11 +312,7 @@ export default function AdminDashboard({ userInfo }) {
                                 <td className="py-3 text-muted fw-bold">#{user.id}</td>
                                 <td>
                                 <div className="d-flex align-items-center">
-                                    {user.avatar_url ? (
-                                    <img src={user.avatar_url} alt="avt" width="40" height="40" className="rounded-circle me-3 border border-secondary" style={{objectFit:'cover'}}/>
-                                    ) : (
                                     <div className="rounded-circle me-3 d-flex align-items-center justify-content-center border" style={{width:'40px', height:'40px', backgroundColor: 'var(--bg-input)'}}>👤</div>
-                                    )}
                                     <span className="fw-bold text-white fs-6">{user.name}</span>
                                 </div>
                                 </td>
@@ -371,7 +322,7 @@ export default function AdminDashboard({ userInfo }) {
                                 </td>
                                 <td>
                                 <Badge bg={user.role.startsWith('driver') ? 'info' : 'primary'} className="px-3 py-2 text-dark fw-bold">
-                                    {user.role === 'driver_express' ? 'Tài xế (Xe máy)' : user.role === 'driver_truck' ? 'Tài xế (Xe tải)' : user.role === 'driver_container' ? 'Tài xế (Container)' : 'Khách hàng'}
+                                    {user.role === 'driver_express' ? 'Tài xế (Xe máy)' : user.role === 'driver_truck' ? 'Tài xế (Xe tải)' : 'Khách hàng'}
                                 </Badge>
                                 </td>
                                 <td className="text-center">
@@ -430,7 +381,6 @@ export default function AdminDashboard({ userInfo }) {
                     <Col md={4} className="border-end" style={{ borderColor: 'var(--border-color) !important' }}>
                         <h5 className="text-white fw-bold mb-3 pb-2 border-bottom" style={{ borderColor: 'var(--border-color) !important' }}>Kênh Hỗ Trợ</h5>
                         <ListGroup variant="flush" className="bg-transparent">
-                            {supportUsers.length === 0 && <p className="text-muted fst-italic text-center mt-4">Không có yêu cầu hỗ trợ nào.</p>}
                             {supportUsers.map(u => (
                             <ListGroup.Item action key={u.id} active={selectedSupportUserId === u.id} onClick={() => loadSupportChat(u.id)} className="fw-bold mb-2 rounded-3 border-0" style={{ backgroundColor: selectedSupportUserId === u.id ? 'var(--brand-orange)' : 'var(--bg-input)', color: 'var(--text-main)' }}>
                                 👤 {u.name} <span className="ms-1" style={{fontSize:'12px', opacity:0.8}}>(ID: #{u.id})</span>

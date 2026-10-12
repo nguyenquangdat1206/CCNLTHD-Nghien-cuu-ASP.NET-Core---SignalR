@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Button, Badge, Modal, Form, Alert, Row, Col } from 'react-bootstrap';
+import { Container, Button, Badge, Modal, Form, Alert } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_URL } from '../../config';
@@ -81,7 +81,6 @@ export default function CustomerDashboard({ userInfo }) {
     <Container fluid className="py-5" style={{ backgroundColor: 'var(--bg-main)', minHeight: '100vh' }}>
       <Container style={{ maxWidth: '900px' }}>
         
-        {/* HEADER DARK FOREST */}
         <div className="d-flex justify-content-between align-items-center mb-5 pb-3 border-bottom" style={{ borderColor: 'var(--border-color)' }}>
           <div className="d-flex align-items-center">
             {userInfo.avatar_url ? (
@@ -100,7 +99,6 @@ export default function CustomerDashboard({ userInfo }) {
           
         {actionMessage && <Alert variant={actionMessage.includes('❌') ? 'danger' : 'success'} className="logistics-card border-0 fw-bold">{actionMessage}</Alert>}
           
-        {/* NÚT ĐẶT ĐƠN KHỔNG LỒ (CALL TO ACTION) */}
         <div className="logistics-card p-4 mb-5 text-center" style={{ border: '1px solid var(--brand-orange)' }}>
             <h4 className="text-white fw-bold mb-2">Bạn đang muốn giao gì hôm nay?</h4>
             <p className="text-muted mb-4">Giao nhanh xe máy, thuê tải chở hàng hay book container đi tỉnh.</p>
@@ -109,7 +107,6 @@ export default function CustomerDashboard({ userInfo }) {
             </Button>
         </div>
 
-        {/* THẺ ĐƠN ĐANG CHẠY (NỔI BẬT NẾU CÓ) */}
         {activeOrders.length > 0 && (
           <div className="mb-5">
             <h5 className="fw-bold text-white mb-3 d-flex align-items-center gap-2">
@@ -154,7 +151,6 @@ export default function CustomerDashboard({ userInfo }) {
             </div>
         )}
 
-        {/* MODAL CẬP NHẬT HỒ SƠ */}
         <Modal show={showProfileModal} onHide={() => setShowProfileModal(false)} centered contentClassName="logistics-card border-0">
           <Modal.Header closeButton className="border-bottom" style={{borderColor: 'var(--border-color)'}}>
               <Modal.Title className="fw-bold text-white">Hồ Sơ Cá Nhân</Modal.Title>

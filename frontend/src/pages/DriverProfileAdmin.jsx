@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Card, Button, Table, Badge, Row, Col, Alert, Placeholder } from 'react-bootstrap';
+import { Container, Card, Button, Table, Badge, Row, Col, Placeholder } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL } from '../config';
 
 function DriverProfileAdmin() {
   const { id } = useParams();
@@ -14,23 +12,34 @@ function DriverProfileAdmin() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // GIẢ LẬP FETCH DỮ LIỆU DEMO
   useEffect(() => {
     if (!userInfo || userInfo.role !== 'admin') { navigate('/'); return; }
     
-    const fetchDriverProfile = async () => {
-      setLoading(true);
-      try {
-        const response = await axios.get(`${API_URL}/admin/drivers/${id}/profile`);
-        setDriverInfo(response.data.driver);
-        setOrders(response.data.orders);
-      } catch (error) { console.error(error); }
-      setTimeout(() => setLoading(false), 600);
-    };
+    setLoading(true);
+    setTimeout(() => {
+      setDriverInfo({
+        id: id,
+        name: "Nguyễn Quang Đạt",
+        phone: "0868923294",
+        license_plate: "51H-26439",
+        is_active: true,
+        ban_reason: "",
+        avatar_url: ""
+      });
+      
+      setOrders([
+        { id: '101', pickup_location: "Đại học Sài Gòn", dropoff_location: "Landmark 81", price: 65000, status: 'completed', rating: 5, feedback: "Tài xế nhiệt tình" },
+        { id: '102', pickup_location: "Chợ Bến Thành", dropoff_location: "Sân bay Tân Sơn Nhất", price: 120000, status: 'completed', rating: 1, feedback: "Thái độ không tốt, đi nhầm đường" },
+        { id: '103', pickup_location: "Phố Đi Bộ", dropoff_location: "Quận 7", price: 45000, status: 'cancelled', rating: null, feedback: null }
+      ]);
+      setLoading(false);
+    }, 600);
+    // Đã tách userInfo thành userInfo?.user_id để chống lỗi chớp nháy vòng lặp
+  }, [id, userInfo?.user_id, userInfo?.role, navigate]); 
 
-    fetchDriverProfile();
-  }, [id]);
-
-  const handleToggleBan = async () => {
+  // GIẢ LẬP KHÓA/MỞ TÀI KHOẢN
+  const handleToggleBan = () => {
     let reason = "";
     if (driverInfo.is_active) {
       reason = window.prompt("🚨 Vui lòng nhập lý do KHÓA tài khoản (Tài xế sẽ nhìn thấy lý do này):", "Thái độ phục vụ kém, bị đánh giá dưới 2 sao nhiều lần.");
@@ -39,14 +48,13 @@ function DriverProfileAdmin() {
       if (!window.confirm("🔓 Bạn muốn MỞ KHÓA cho tài khoản này?")) return;
     }
 
-    try {
-      await axios.put(`${API_URL}/admin/users/${id}/toggle_active`, { reason });
-      const response = await axios.get(`${API_URL}/admin/drivers/${id}/profile`);
-      setDriverInfo(response.data.driver);
-    } catch (error) { alert("Lỗi khi thay đổi trạng thái!"); }
+    setDriverInfo(prev => ({
+        ...prev,
+        is_active: !prev.is_active,
+        ban_reason: reason
+    }));
   };
 
-  // HIỆU ỨNG SKELETON CHUẨN DARK MODE
   if (loading) return (
     <Container fluid className="py-5" style={{ backgroundColor: 'var(--bg-main)', minHeight: '100vh' }}>
       <Container style={{ maxWidth: '1000px' }}>
@@ -58,7 +66,6 @@ function DriverProfileAdmin() {
                 <Placeholder style={{width: '100px', height: '100px', borderRadius: '50%', backgroundColor: 'var(--border-color)'}} />
               </Placeholder>
               <Placeholder as="h4" animation="glow"><Placeholder xs={6} style={{backgroundColor: 'var(--border-color)'}}/></Placeholder>
-              <Placeholder as="p" animation="glow" className="mb-1"><Placeholder xs={4} style={{backgroundColor: 'var(--border-color)'}}/></Placeholder>
               <Placeholder animation="glow" className="mb-3"><Placeholder xs={4} style={{height: '25px', borderRadius: '5px', backgroundColor: 'var(--border-color)'}}/></Placeholder>
             </div>
           </Col>
@@ -85,19 +92,14 @@ function DriverProfileAdmin() {
   return (
     <Container fluid className="py-5" style={{ backgroundColor: 'var(--bg-main)', minHeight: '100vh' }}>
       <Container style={{ maxWidth: '1100px' }}>
-        <Button variant="outline-light" className="mb-4 fw-bold" style={{ borderColor: 'var(--border-color)' }} onClick={() => navigate('/dashboard')}>
+        <Button variant="outline-light" className="mb-4 fw-bold" style={{ borderColor: 'var(--border-color)' }} onClick={() => navigate('/admin')}>
           ⬅ Quay lại Quản lý
         </Button>
         
         <Row className="g-4">
-          {/* CỘT TRÁI: THÔNG TIN TÀI XẾ */}
           <Col md={4}>
             <div className="logistics-card p-4 text-center" style={{ borderTop: `4px solid ${driverInfo.is_active ? '#4ADE80' : '#FF4D4D'}` }}>
-              {driverInfo.avatar_url ? (
-                <img src={driverInfo.avatar_url} width="100" height="100" className="rounded-circle mb-3 border" style={{objectFit: 'cover', borderColor: 'var(--border-color)'}} alt="avt"/>
-              ) : (
-                <div className="d-inline-flex justify-content-center align-items-center rounded-circle mb-3 border" style={{width: '100px', height: '100px', backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-color)', fontSize: '40px'}}>🛵</div>
-              )}
+              <div className="d-inline-flex justify-content-center align-items-center rounded-circle mb-3 border" style={{width: '100px', height: '100px', backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-color)', fontSize: '40px'}}>🛵</div>
               
               <h4 className="text-white fw-bold">{driverInfo.name}</h4>
               <p className="text-muted mb-2">📞 {driverInfo.phone}</p>
@@ -130,10 +132,7 @@ function DriverProfileAdmin() {
             </div>
           </Col>
 
-          {/* CỘT PHẢI: LỊCH SỬ & CẢNH BÁO */}
           <Col md={8}>
-            
-            {/* DANH SÁCH CẢNH BÁO SAO THẤP */}
             <div className="logistics-card p-4 mb-4">
               <h5 className="fw-bold mb-4 d-flex align-items-center gap-2" style={{ color: '#FF4D4D' }}>
                 <span className="fs-4">🚩</span> Cảnh báo: Đơn hàng bị đánh giá thấp
@@ -169,10 +168,9 @@ function DriverProfileAdmin() {
               )}
             </div>
 
-            {/* TẤT CẢ LỊCH SỬ CUỐC XE */}
             <div className="logistics-card p-4">
               <h5 className="text-white fw-bold mb-4 d-flex align-items-center gap-2">
-                <span className="fs-4">📦</span> Lịch sử tất cả cuốc xe
+                <span className="fs-4">📦</span> Lịch sử tất cả cuốc xe (Demo)
               </h5>
               
               <div className="table-responsive">
@@ -200,9 +198,6 @@ function DriverProfileAdmin() {
                         <td className="py-3 text-end fw-bold text-warning">{order.rating ? `${order.rating} ⭐` : <span className="text-muted fw-normal">-</span>}</td>
                       </tr>
                     ))}
-                    {orders.length === 0 && (
-                      <tr><td colSpan="5" className="text-center py-4 text-muted fw-bold">Chưa có chuyến xe nào</td></tr>
-                    )}
                   </tbody>
                 </Table>
               </div>

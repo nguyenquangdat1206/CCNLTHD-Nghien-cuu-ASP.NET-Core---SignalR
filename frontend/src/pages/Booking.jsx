@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Form, Button, Alert, InputGroup } from 'react-bootstrap';
+import { Container, Row, Col, Form, Button, Alert } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { API_URL } from '../config';
-
 import AddressSearchInput from '../components/AddressSearchInput';
 import BookingMap from '../components/BookingMap';
 
@@ -19,13 +16,13 @@ const PORT_LIST = [
 ];
 
 export default function Booking() {
-  const [promoCodeInput, setPromoCodeInput] = useState('');
-  const [appliedPromo, setAppliedPromo] = useState(null);
-
   const navigate = useNavigate();
   const userInfoString = localStorage.getItem('userInfo');
   const userInfo = userInfoString ? JSON.parse(userInfoString) : null;
 
+  const [promoCodeInput, setPromoCodeInput] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState(null);
+  
   const [userLocation, setUserLocation] = useState(null);
   const [pickupCoords, setPickupCoords] = useState(null);
   const [dropoffCoords, setDropoffCoords] = useState(null);
@@ -77,23 +74,17 @@ export default function Booking() {
       let calcBase = 0;
       if (serviceType === 'container') {
         const BASE_CONTAINER = 2600000; 
-        if (distance <= 20) {
-            calcBase = BASE_CONTAINER;
-        } else {
+        if (distance <= 20) calcBase = BASE_CONTAINER;
+        else {
             const extraKm = Math.ceil(distance - 20); 
             calcBase = BASE_CONTAINER + (extraKm * (distance < 50 ? 33000 : distance < 100 ? 32000 : distance < 200 ? 31500 : 29500));
         }
       } else if (serviceType === 'truck') {
         calcBase = distance <= 5 ? 150000 : 150000 + (Math.ceil(distance - 5) * 15000);
       } else {
-        // Áp dụng đúng công thức: 3-5km cố định 25.000đ, trên 5km cộng 6.500đ/km
-        if (distance <= 3) {
-            calcBase = 16000;
-        } else if (distance <= 5) {
-            calcBase = 25000;
-        } else {
-            calcBase = 25000 + Math.ceil(distance - 5) * 6500;
-        }
+        if (distance <= 3) calcBase = 16000;
+        else if (distance <= 5) calcBase = 25000;
+        else calcBase = 25000 + (Math.ceil(distance - 5) * 6500);
       }
       setBasePrice(Math.ceil(calcBase / 1000) * 1000);
     } else setBasePrice(0);
@@ -111,11 +102,6 @@ export default function Booking() {
     }
   }, [totalPrice, appliedPromo]);
 
-  useEffect(() => {
-    if (pickupCoords && dropoffCoords) fetchRouteDistance(pickupCoords, dropoffCoords);
-    else { setDistance(0); setBasePrice(0); setRoutePolyline([]); }
-  }, [pickupCoords, dropoffCoords]);
-
   const fetchRouteDistance = async (start, end) => {
     try {
       const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`);
@@ -124,8 +110,16 @@ export default function Booking() {
         setDistance(parseFloat((data.routes[0].distance / 1000).toFixed(1)));
         setRoutePolyline(data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]));
       }
-    } catch (error) { setDistance(10.0); }
+    } catch (error) { 
+      setDistance(8.5); 
+      setRoutePolyline([[start.lat, start.lng], [end.lat, end.lng]]);
+    }
   };
+
+  useEffect(() => {
+    if (pickupCoords && dropoffCoords) fetchRouteDistance(pickupCoords, dropoffCoords);
+    else { setDistance(0); setBasePrice(0); setRoutePolyline([]); }
+  }, [pickupCoords, dropoffCoords]);
 
   const reverseGeocode = async (lat, lng, type) => {
     try {
@@ -136,46 +130,30 @@ export default function Booking() {
         const finalAddress = [addr.amenity || addr.building, addr.road, addr.suburb, addr.city_district].filter(Boolean).join(', ');
         type === 'pickup' ? setPickupAddress(finalAddress || data.display_name) : setDropoffAddress(finalAddress || data.display_name);
       }
-    } catch (error) { console.error(error); }
+    } catch (error) { 
+        type === 'pickup' ? setPickupAddress("Địa điểm lấy hàng (Demo)") : setDropoffAddress("Địa điểm giao hàng (Demo)");
+    }
   };
 
-  const handleApplyPromo = async () => {
-    if (!promoCodeInput.trim()) return;
-    try {
-      const response = await axios.post(`${API_URL}/promotions/apply`, { code: promoCodeInput, order_value: totalPrice });
-      setAppliedPromo(response.data);
-    } catch (error) { alert("❌ Lỗi mã khuyến mãi!"); setAppliedPromo(null); }
+  const handleApplyPromo = () => {
+    if (promoCodeInput === 'ITVINA' || promoCodeInput === 'SGU') {
+      setAppliedPromo({ discount_amount: 15000, min_order_value: 0 });
+    } else {
+      alert("❌ Mã không hợp lệ (Hãy thử: ITVINA hoặc SGU)"); setAppliedPromo(null);
+    }
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (!pickupCoords || !dropoffCoords) { setIsError(true); setMessage("⚠️ Vui lòng chọn điểm lấy và giao hàng!"); return; }
     
     setIsSubmitting(true); setMessage('Đang lên đơn...'); setIsError(false);
-    try {
-      const token = userInfo.access_token;
-      const getAddrText = (addr, coords) => addr || `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`;
-      
-      const pickupRes = await axios.post(`${API_URL}/users/${userInfo.user_id}/addresses`, { label: "Điểm lấy", latitude: pickupCoords.lat, longitude: pickupCoords.lng, address_text: getAddrText(pickupAddress, pickupCoords) }, { headers: { Authorization: `Bearer ${token}` } });
-      const dropoffRes = await axios.post(`${API_URL}/users/${userInfo.user_id}/addresses`, { label: "Điểm giao", latitude: dropoffCoords.lat, longitude: dropoffCoords.lng, address_text: getAddrText(dropoffAddress, dropoffCoords) }, { headers: { Authorization: `Bearer ${token}` } });
-      
-      const extraFeesData = { bulky_fee: isBulky ? 20000 : 0, door_delivery_fee: isDoorDelivery ? 10000 : 0, tip: parseInt(tipAmount) || 0 };
-      
-      // Áp dụng định dạng tên gói hàng XE MÁY - GIAO NHANH để khớp điều kiện Batching của Backend
-      const finalDetails = `[${serviceType === 'express' ? 'XE MÁY - GIAO NHANH' : serviceType === 'truck' ? 'XE TẢI' : 'CONTAINER'}] ${packageDetails}`;
-      
-      await axios.post(`${API_URL}/orders`, {
-        customer_id: userInfo.user_id, pickup_address_id: pickupRes.data.id, dropoff_address_id: dropoffRes.data.id,
-        promo_id: appliedPromo ? appliedPromo.promo_id : null, discount_amount: appliedPromo ? appliedPromo.discount_amount : 0,                           
-        package_details: finalDetails, original_price: basePrice, total_price: Math.max(0, totalPrice - (appliedPromo?.discount_amount || 0)),
-        extra_fees: JSON.stringify(extraFeesData), payment_method: paymentMethod, cod_amount: hasCod ? (parseInt(codAmount) || 0) : 0,
-        sender_name: senderName, sender_phone: senderPhone, receiver_name: receiverName, receiver_phone: receiverPhone
-      }, { headers: { Authorization: `Bearer ${token}` } });
-
-      setIsError(false); setMessage('🎉 Gọi tài xế thành công!');
-      setTimeout(() => navigate('/dashboard'), 1500);
-    } catch (error) { setIsError(true); setMessage("❌ Không thể xử lý đơn hàng lúc này."); } 
-    finally { setIsSubmitting(false); }
+    
+    setTimeout(() => {
+      setIsError(false); setMessage('🎉 Đặt xe thành công! (Chế độ Demo)');
+      // ĐÃ SỬA: Chuyển về trang Khách Hàng thay vì Dashboard
+      setTimeout(() => navigate('/guest'), 1500);
+    }, 1500);
   };
 
   const finalTotalPrice = Math.max(0, totalPrice - (appliedPromo ? appliedPromo.discount_amount : 0));
@@ -187,11 +165,12 @@ export default function Booking() {
         <div className="d-flex align-items-center mb-5 pb-3 border-bottom" style={{ borderColor: 'var(--border-color)' }}>
           <div className="d-flex align-items-center me-5">
             <div className="bg-primary text-white rounded me-2 d-flex align-items-center justify-content-center" style={{ width:'40px', height:'40px', backgroundColor: 'var(--brand-orange) !important' }}>🚚</div>
-            <h4 className="mb-0 fw-bold text-white">VẬN CHỞ</h4>
+            <h4 className="mb-0 fw-bold text-white">VẬN CHỞ DEMO</h4>
           </div>
           <div className="d-flex gap-4">
              <div className="text-white fw-bold" style={{ borderBottom: '2px solid var(--brand-orange)', paddingBottom: '4px', cursor:'pointer' }}>Điều phối</div>
-             <div className="text-muted fw-bold" style={{ cursor:'pointer' }} onClick={() => navigate('/dashboard')}>Theo dõi đơn</div>
+             {/* ĐÃ SỬA: Nút Quay Về cũng trỏ thẳng về trang Khách Hàng */}
+             <div className="text-muted fw-bold" style={{ cursor:'pointer' }} onClick={() => navigate('/guest')}>Quay về</div>
           </div>
         </div>
 
@@ -203,7 +182,6 @@ export default function Booking() {
             <h3 className="text-white fw-bold mb-4">Chọn phương tiện</h3>
 
             <Form onSubmit={handleSubmit}>
-              
               <div className="d-flex flex-column gap-3 mb-4">
                 <div className={`vehicle-card ${serviceType === 'express' ? 'active' : ''}`} onClick={() => setServiceType('express')}>
                   <div className="d-flex align-items-center">
@@ -247,7 +225,7 @@ export default function Booking() {
                       placeholder="Nhập địa chỉ..." value={pickupAddress} 
                       onChange={(val) => { setPickupAddress(val); setPickupCoords(null); }} 
                       onSelectLocation={(c) => { setPickupCoords(c); setDropoffCoords(null); setDropoffAddress(''); }} 
-                      userLocation={userLocation} customClass="logistics-input border-0 px-0"
+                      userLocation={userLocation} badgeColor="muted"
                     />
                   </div>
                 </Col>
@@ -266,7 +244,7 @@ export default function Booking() {
                       <AddressSearchInput 
                         placeholder="Nhập địa chỉ..." value={dropoffAddress} 
                         onChange={(val) => { setDropoffAddress(val); setDropoffCoords(null); }} 
-                        onSelectLocation={setDropoffCoords} userLocation={userLocation} customClass="logistics-input border-0 px-0"
+                        onSelectLocation={setDropoffCoords} userLocation={userLocation} badgeColor="orange"
                       />
                     )}
                   </div>
@@ -306,7 +284,7 @@ export default function Booking() {
               </Row>
 
               <Button type="submit" className="btn-orange w-100 py-3 fs-5" disabled={!pickupCoords || !dropoffCoords || isSubmitting}>
-                {isSubmitting ? 'ĐANG TÌM TÀI XẾ...' : 'TÌM TÀI XẾ/XE NGAY'}
+                {isSubmitting ? 'ĐANG LÊN ĐƠN...' : 'TÌM TÀI XẾ/XE NGAY'}
               </Button>
             </Form>
           </Col>
@@ -317,7 +295,7 @@ export default function Booking() {
                    <p className="text-muted mb-1" style={{fontSize:'14px'}}>Theo dõi bản đồ</p>
                    <h3 className="text-white fw-bold mb-0">Lộ trình dự kiến</h3>
                 </div>
-                <h4 className="text-primary fw-bold mb-0">{finalTotalPrice.toLocaleString()}đ</h4>
+                <h4 className="text-primary fw-bold mb-0" style={{ color: '#4ADE80 !important' }}>{finalTotalPrice.toLocaleString()}đ</h4>
              </div>
 
              <div className="logistics-card p-2 mb-4" style={{ height: '350px', overflow: 'hidden' }}>
@@ -349,7 +327,6 @@ export default function Booking() {
                 {appliedPromo && <div className="text-success mt-3 fs-6 fw-bold">🎉 Áp dụng thành công! Đã giảm {appliedPromo.discount_amount.toLocaleString()}đ</div>}
              </div>
           </Col>
-
         </Row>
       </Container>
     </Container>
