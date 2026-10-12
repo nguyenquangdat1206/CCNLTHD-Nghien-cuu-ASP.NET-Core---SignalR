@@ -68,8 +68,12 @@ export default function OrderDetail() {
   }, [id, userInfo?.user_id, userInfo?.role]);
 
   useEffect(() => {
-    if (userInfo?.role === 'customer' && orderDetails?.order?.status === 'completed' && !orderDetails?.order?.rating) {
-      setShowReviewModal(true);
+    if (userInfo?.role === 'customer' && orderDetails?.order?.status === 'completed') {
+      if (!orderDetails.order.rating) {
+        setShowReviewModal(true);
+      } else {
+        setShowReviewModal(false);
+      }
     }
   }, [orderDetails?.order?.status, orderDetails?.order?.rating]);
 
@@ -229,7 +233,6 @@ export default function OrderDetail() {
     <Container fluid className="py-5" style={{ backgroundColor: 'var(--bg-main)', minHeight: '100vh' }}>
       <Container style={{ maxWidth: '1400px' }}>
         
-        {/* HEADER */}
         <div className="d-flex justify-content-between align-items-center mb-4">
           <h3 className="mb-0 fw-bold" style={{ color: 'var(--brand-orange)' }}>🏷️ {batchOrders.length > 0 ? "Lộ Trình Vận Hành (Đơn Ghép)" : `Chi tiết đơn hàng #${orderDetails.order.id}`}</h3>
           <Button variant="outline-light" style={{ borderColor: 'var(--border-color)' }} onClick={() => navigate(isAdmin ? '/admin' : '/dashboard')}>⬅ Quay lại</Button>
@@ -241,7 +244,6 @@ export default function OrderDetail() {
           </Alert>
         )}
 
-        {/* THANH TIẾN TRÌNH */}
         <div className="logistics-card mb-4 p-4 text-center">
           <h6 className="fw-bold text-muted mb-4 text-uppercase tracking-wide">Tiến trình vận đơn</h6>
           <div className="d-flex justify-content-between align-items-center position-relative mx-auto" style={{ maxWidth: '800px' }}>
@@ -260,13 +262,10 @@ export default function OrderDetail() {
           </div>
         </div>
 
-        {/* CHIA 2 CỘT CHO MÀN HÌNH - SỬ DỤNG align-items-stretch ĐỂ 2 CỘT BẰNG NHAU */}
         <Row className="g-4 align-items-stretch">
           
-          {/* CỘT TRÁI: LỘ TRÌNH CÔNG VIỆC VÀ HỒ SƠ LIÊN LẠC (Dồn vào flex-column) */}
           <Col lg={7} xl={8} className="d-flex flex-column gap-4">
             
-            {/* LỘ TRÌNH CÔNG VIỆC */}
             <div className="logistics-card overflow-hidden">
               <div className="text-white border-bottom py-3 px-4 d-flex align-items-center" style={{ backgroundColor: batchOrders.length > 0 ? '#4ADE80' : 'var(--brand-orange)', borderColor: 'var(--border-color) !important' }}>
                 <h5 className="mb-0 fw-bold text-dark">📦 Lộ Trình Công Việc</h5>
@@ -364,10 +363,8 @@ export default function OrderDetail() {
               </div>
             </div>
 
-            {/* HỒ SƠ LIÊN LẠC (Dời sang cột trái) */}
             <OrderContactInfo renderOrders={renderOrders} orderDetails={orderDetails} shouldHideInfo={shouldHideInfo} batchOrders={batchOrders} />
 
-            {/* PHẦN ĐÁNH GIÁ CỦA KHÁCH */}
             {orderDetails.order.rating && (
               <div className="logistics-card p-4" style={{ borderLeft: '4px solid #FFC107' }}>
                   <h6 className="text-warning mb-3 fw-bold text-uppercase">⭐ Đánh giá từ khách hàng:</h6>
@@ -378,7 +375,6 @@ export default function OrderDetail() {
               </div>
             )}
 
-            {/* YÊU CẦU KHÁCH ĐÁNH GIÁ */}
             {userInfo.role === 'customer' && orderDetails.order.status === 'completed' && !orderDetails.order.rating && (
               <div className="logistics-card p-4 d-flex justify-content-between align-items-center flex-wrap gap-3" style={{ borderLeft: '4px solid #4ADE80' }}>
                   <div>
@@ -390,11 +386,9 @@ export default function OrderDetail() {
             )}
           </Col>
 
-          {/* CỘT PHẢI: FULL KHUNG CHAT TƯƠNG TÁC */}
           <Col lg={5} xl={4} className="d-flex flex-column">
             
             {isAdmin ? (
-              /* GIAO DIỆN CHAT DÀNH RIÊNG CHO ADMIN (GIỐNG ẢNH 2) */
               <div className="logistics-card p-0 d-flex flex-column h-100 overflow-hidden" style={{ border: '1px solid var(--border-color)', minHeight: '600px' }}>
                   <div className="p-3 border-bottom d-flex justify-content-between align-items-center" style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)', borderColor: 'var(--border-color) !important' }}>
                     <h5 className="fw-bold text-white mb-0 d-flex align-items-center gap-2">
@@ -410,7 +404,6 @@ export default function OrderDetail() {
                       {messages.map(msg => {
                         const isSystem = msg.content.includes("HỆ THỐNG:");
                         
-                        // Xử lý riêng giao diện cho tin nhắn Hệ thống (Bubble nền xám, chữ trắng)
                         if (isSystem) {
                           const cleanContent = msg.content.replace("HỆ THỐNG: ", "");
                           const icon = cleanContent.includes("thành công") ? "🎉" : "🔴";
@@ -422,7 +415,6 @@ export default function OrderDetail() {
                           );
                         }
                         
-                        // Xử lý tin nhắn của Tài xế / Khách hàng
                         const isDriver = msg.sender_id === orderDetails?.order?.driver_id;
                         return (
                           <div key={msg.id} className="mb-3 p-3 rounded-4 border shadow-sm" style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-color) !important' }}>
@@ -436,7 +428,6 @@ export default function OrderDetail() {
                     </div>
                   )}
 
-                  {/* Thanh Footer báo kênh chat đã đóng */}
                   <div className="p-3 border-top" style={{ backgroundColor: 'var(--bg-main)', borderColor: 'var(--border-color) !important' }}>
                       <div className="d-flex align-items-center gap-2">
                           <div className="flex-grow-1 p-3 rounded border text-muted fw-bold d-flex align-items-center" style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-color) !important' }}>
@@ -447,7 +438,6 @@ export default function OrderDetail() {
                   </div>
               </div>
             ) : (
-              /* KHUNG CHAT TƯƠNG TÁC CHO TÀI XẾ/KHÁCH HÀNG */
               <div className="h-100">
                 <OrderChatBox orderId={id} userInfo={userInfo} isChatDisabled={isChatDisabled} isBatchClosed={isBatchClosed} messages={messages} fetchMessages={fetchMessages} />
               </div>
@@ -457,7 +447,6 @@ export default function OrderDetail() {
 
         </Row>
 
-        {/* MODALS */}
         <Modal show={showReviewModal} onHide={() => setShowReviewModal(false)} centered contentClassName="logistics-card border-0">
           <Modal.Header closeButton className="border-bottom" style={{ borderColor: 'var(--border-color)' }}>
             <Modal.Title className="fw-bold text-white">🎉 Chuyến đi hoàn tất!</Modal.Title>
