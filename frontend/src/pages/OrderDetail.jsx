@@ -1,161 +1,441 @@
-import React, { useState, useEffect } from 'react';
-import { Container, Card, Row, Col, Badge, Button, Form, Modal } from 'react-bootstrap';
+import React, { useState, useEffect, useRef } from 'react';
+import { Container, Row, Col, Button, Badge, ProgressBar, Modal, Form, InputGroup } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router-dom';
-import SwipeButton from '../components/SwipeButton';
-import OrderChatBox from '../components/OrderChatBox';
 
 export default function OrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [order, setOrder] = useState(null);
+
+  // STATE CHAT VÀ ĐÁNH GIÁ TÀI XẾ
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingStars, setRatingStars] = useState(5);
+  const [ratingFeedback, setRatingFeedback] = useState('');
+  const [hasRated, setHasRated] = useState(false);
+
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState([
+    { sender: 'driver', text: 'Chào bạn, mình đang di chuyển tới điểm lấy hàng nhé!' },
+    { sender: 'customer', text: 'Dạ ok bạn, đến nơi cứ gọi số điện thoại trên đơn nhé.' }
+  ]);
+  const chatEndRef = useRef(null);
+
   const userInfoString = localStorage.getItem('userInfo');
-  const userInfo = userInfoString ? JSON.parse(userInfoString) : null;
+  const userInfo = userInfoString ? JSON.parse(userInfoString) : { role: 'customer' };
+  const isDriver = userInfo?.role?.startsWith('driver');
 
-  const isDriverOwner = userInfo?.role?.startsWith('driver');
-  const isAdmin = userInfo?.role === 'admin';
+  // MOCKUP DỮ LIỆU ĐƠN HÀNG DEMO
+  useEffect(() => {
+    setLoading(true);
+    setTimeout(() => {
+      setOrder({
+        id: id || '101',
+        serviceType: 'express',
+        serviceName: 'Xe máy giao nhanh',
+        status: 'completed', // Đặt sẵn 'completed' để test đánh giá, hoặc 'delivering'
+        pickup: 'Đại học Sài Gòn, 273 An Dương Vương, Q.5, TP.HCM',
+        dropoff: 'Landmark 81, 720A Điện Biên Phủ, Bình Thạnh, TP.HCM',
+        senderName: 'Nguyễn Quang Đạt',
+        senderPhone: '0868923294',
+        receiverName: 'Trần Thị B',
+        receiverPhone: '0909123456',
+        packageDetails: 'Tài liệu & Quà tặng (Dưới 5kg)',
+        distance: 8.5,
+        basePrice: 55000,
+        extraFee: 10000,
+        totalPrice: 65000,
+        driverEarning: 52000,
+        paymentMethod: 'Tiền mặt khi nhận hàng',
+        driver: {
+          id: 3,
+          name: 'Nguyễn Văn Tài (Xế Partner)',
+          phone: '0912345678',
+          licensePlate: '51H-264.39',
+          rating: '4.9 ⭐'
+        },
+        createdAt: '28/10/2026 14:30'
+      });
+      setLoading(false);
+    }, 400);
+  }, [id]);
 
-  // Dữ liệu giả lập
-  const [orderState, setOrderState] = useState('accepted'); // pending -> accepted -> arrived_pickup -> picking_up -> delivering -> completed
-  const [showPodModal, setShowPodModal] = useState(false);
-  const [showReviewModal, setShowReviewModal] = useState(false);
-
-  // Xử lý vuốt
-  const handleUpdateStatus = (newStatus) => {
-    setOrderState(newStatus);
-    if (newStatus === 'completed' && userInfo?.role === 'customer') {
-        setShowReviewModal(true); // Nếu khách hàng đang xem, đơn giao xong thì gợi ý đánh giá
+  useEffect(() => {
+    if (showChatModal) {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
+  }, [chatMessages, showChatModal]);
+
+  const handleBack = () => {
+    if (userInfo?.role === 'admin') navigate('/admin');
+    else if (isDriver) navigate('/driver');
+    else navigate('/guest');
   };
 
-  const handleCompleteWithPod = (e) => {
+  const handleNextStatus = () => {
+    if (!order) return;
+    let nextStatus = order.status;
+    if (order.status === 'accepted') nextStatus = 'arrived_pickup';
+    else if (order.status === 'arrived_pickup') nextStatus = 'delivering';
+    else if (order.status === 'delivering') nextStatus = 'completed';
+
+    setOrder(prev => ({ ...prev, status: nextStatus }));
+  };
+
+  const handleSendMessage = (e) => {
     e.preventDefault();
-    setShowPodModal(false);
-    handleUpdateStatus('completed');
+    if (!chatInput.trim()) return;
+    const currentSender = isDriver ? 'driver' : 'customer';
+    setChatMessages(prev => [...prev, { sender: currentSender, text: chatInput }]);
+    setChatInput('');
   };
 
-  const getStatusBadge = (status) => {
-    switch(status) {
-      case 'accepted': return <Badge bg="info" className="px-2 py-1 text-dark">Tài xế đang đến</Badge>;
-      case 'arrived_pickup': return <Badge bg="primary" className="px-2 py-1">Đã tới điểm lấy</Badge>;
-      case 'picking_up': return <Badge bg="warning" className="px-2 py-1 text-dark">Đã lấy hàng</Badge>;
-      case 'delivering': return <Badge bg="danger" className="px-2 py-1">Đang giao</Badge>;
-      case 'completed': return <Badge bg="success" className="px-2 py-1">Đã hoàn thành</Badge>;
-      default: return <Badge bg="secondary" className="px-2 py-1">{status}</Badge>;
+  // XỬ LÝ GỬI ĐÁNH GIÁ TÀI XẾ
+  const handleSubmitRating = (e) => {
+    e.preventDefault();
+    setHasRated(true);
+    setShowRatingModal(false);
+
+    if (ratingStars === 1) {
+      alert("🚨 CẢNH BÁO ĐÃ ĐƯỢC GỬI TỚI ADMIN!\n\nĐánh giá 1 sao của bạn đã được chuyển trực tiếp tới Quản trị viên. Hệ thống sẽ tiến hành kiểm tra và khóa tài khoản tài xế này nếu xác nhận vi phạm.");
+    } else {
+      alert(`🎉 Cảm ơn bạn đã đánh giá ${ratingStars} sao cho tài xế!`);
     }
   };
 
+  const openGoogleMaps = (address) => {
+    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`, '_blank');
+  };
+
+  if (loading) return (
+    <Container fluid className="py-5 text-center text-muted" style={{ backgroundColor: 'var(--bg-main)', minHeight: '100vh' }}>
+      <h4>Đang tải chi tiết đơn hàng #{id}...</h4>
+    </Container>
+  );
+
+  if (!order) return (
+    <Container fluid className="py-5 text-center text-white" style={{ backgroundColor: 'var(--bg-main)', minHeight: '100vh' }}>
+      <h3>Không tìm thấy đơn hàng #{id}</h3>
+      <Button className="btn-orange mt-3" onClick={handleBack}>Quay về</Button>
+    </Container>
+  );
+
+  // =========================================================================
+  // GIAO DIỆN TÀI XẾ (DRIVER VIEW)
+  // =========================================================================
+  if (isDriver) {
+    return (
+      <Container fluid className="py-2 py-md-4" style={{ backgroundColor: 'var(--bg-main)', minHeight: '100vh' }}>
+        <div style={{ maxWidth: '440px', margin: '0 auto' }}>
+          
+          <div className="logistics-card p-3 mb-3 d-flex justify-content-between align-items-center" style={{ borderTop: '4px solid var(--brand-orange)' }}>
+            <Button variant="outline-light" size="sm" style={{ borderColor: 'var(--border-color)', fontSize: '12px' }} onClick={handleBack}>
+              ⬅ Quay lại
+            </Button>
+            <span className="fw-bold text-white fs-6">Đơn hàng #{order.id}</span>
+            <Button variant="outline-warning" size="sm" style={{ fontSize: '12px' }} onClick={() => setShowChatModal(true)}>
+              💬 Chat Khách
+            </Button>
+          </div>
+
+          <div className="logistics-card p-3 mb-3" style={{ border: '1px solid #4ADE80', backgroundColor: 'rgba(74, 222, 128, 0.05)' }}>
+            <Row className="text-center align-items-center g-2">
+              <Col xs={6} className="border-end" style={{ borderColor: 'var(--border-color)' }}>
+                <small className="text-muted d-block fw-bold" style={{ fontSize: '11px' }}>THU NHẬP THỰC NHẬN</small>
+                <h4 className="fw-bold mb-0" style={{ color: '#4ADE80' }}>{order.driverEarning.toLocaleString()}đ</h4>
+              </Col>
+              <Col xs={6}>
+                <small className="text-muted d-block fw-bold" style={{ fontSize: '11px' }}>THANH TOÁN</small>
+                <h5 className="fw-bold mb-0 text-warning">{order.paymentMethod}</h5>
+              </Col>
+            </Row>
+          </div>
+
+          <div className="logistics-card p-3 mb-3 border-start border-4 border-info">
+            <small className="text-muted fw-bold d-block mb-2" style={{ fontSize: '11px' }}>KHÁCH HÀNG ĐẶT ĐƠN</small>
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <div>
+                <h6 className="text-white fw-bold mb-0">{order.senderName}</h6>
+                <small className="text-muted">📞 {order.senderPhone}</small>
+              </div>
+              <div className="d-flex gap-2">
+                <a href={`tel:${order.senderPhone}`} className="btn btn-sm btn-outline-success fw-bold px-3 py-1">📞 Gọi</a>
+                <Button size="sm" className="btn-orange fw-bold py-1" onClick={() => setShowChatModal(true)}>💬 Chat</Button>
+              </div>
+            </div>
+            <div className="pt-2 border-top text-muted" style={{ borderColor: 'var(--border-color)', fontSize: '12px' }}>
+              <strong>Ghi chú:</strong> {order.packageDetails}
+            </div>
+          </div>
+
+          <div className="logistics-card p-3 mb-4">
+            <h6 className="text-white fw-bold mb-3" style={{ fontSize: '13px' }}>📍 LỘ TRÌNH TÁC NGHIỆP</h6>
+            <div className="mb-3 position-relative pb-3 border-bottom" style={{ borderColor: 'var(--border-color)' }}>
+              <div className="d-flex justify-content-between align-items-start mb-1">
+                <small className="text-danger fw-bold" style={{ fontSize: '11px' }}>1. ĐIỂM LẤY HÀNG</small>
+                <Button size="sm" variant="outline-light" style={{ fontSize: '11px', borderColor: 'var(--border-color)' }} onClick={() => openGoogleMaps(order.pickup)}>🗺️ Chỉ đường</Button>
+              </div>
+              <div className="text-white fw-bold" style={{ fontSize: '13px' }}>{order.pickup}</div>
+            </div>
+
+            <div>
+              <div className="d-flex justify-content-between align-items-start mb-1">
+                <small className="text-success fw-bold" style={{ fontSize: '11px' }}>2. ĐIỂM GIAO HÀNG</small>
+                <Button size="sm" variant="outline-light" style={{ fontSize: '11px', borderColor: 'var(--border-color)' }} onClick={() => openGoogleMaps(order.dropoff)}>🗺️ Chỉ đường</Button>
+              </div>
+              <div className="text-white fw-bold" style={{ fontSize: '13px' }}>{order.dropoff}</div>
+            </div>
+          </div>
+
+          <div className="position-sticky bottom-0 pb-3 pt-2" style={{ backgroundColor: 'var(--bg-main)' }}>
+            {order.status === 'accepted' && (
+              <Button className="btn-orange w-100 py-3 fw-bold fs-6 shadow-lg" onClick={handleNextStatus}>📍 ĐÃ TỚI ĐIỂM LẤY HÀNG</Button>
+            )}
+            {order.status === 'arrived_pickup' && (
+              <Button className="btn-warning w-100 py-3 fw-bold fs-6 shadow-lg text-dark" onClick={handleNextStatus}>📦 ĐÃ LẤY HÀNG & BẮT ĐẦU GIAO</Button>
+            )}
+            {order.status === 'delivering' && (
+              <Button variant="success" className="w-100 py-3 fw-bold fs-6 shadow-lg" onClick={handleNextStatus}>✅ HOÀN THÀNH CHUYẾN XE</Button>
+            )}
+            {order.status === 'completed' && (
+              <Button variant="secondary" className="w-100 py-3 fw-bold fs-6" disabled>🎉 ĐƠN HÀNG ĐÃ HOÀN THÀNH</Button>
+            )}
+          </div>
+
+          {/* MODAL CHAT */}
+          <Modal show={showChatModal} onHide={() => setShowChatModal(false)} centered contentClassName="logistics-card border-0">
+            <Modal.Header closeButton className="border-bottom" style={{ borderColor: 'var(--border-color)' }}>
+              <Modal.Title className="fw-bold text-white fs-6">💬 Trao đổi với Khách hàng #{order.id}</Modal.Title>
+            </Modal.Header>
+            <Modal.Body className="p-3">
+              <div className="p-3 mb-3 rounded" style={{ height: '280px', overflowY: 'auto', backgroundColor: 'var(--bg-main)' }}>
+                {chatMessages.map((msg, index) => (
+                  <div key={index} className={`d-flex mb-2 ${msg.sender === 'driver' ? 'justify-content-end' : 'justify-content-start'}`}>
+                    <div className={`p-2 px-3 rounded-3 ${msg.sender === 'driver' ? 'text-white' : 'text-white border'}`} style={{ backgroundColor: msg.sender === 'driver' ? 'var(--brand-orange)' : 'var(--bg-card)', borderColor: 'var(--border-color)', fontSize: '13px' }}>
+                      {msg.text}
+                    </div>
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+              <Form onSubmit={handleSendMessage}>
+                <InputGroup>
+                  <Form.Control type="text" className="logistics-input" placeholder="Nhập tin nhắn..." value={chatInput} onChange={e => setChatInput(e.target.value)} />
+                  <Button type="submit" className="btn-orange fw-bold">Gửi</Button>
+                </InputGroup>
+              </Form>
+            </Modal.Body>
+          </Modal>
+
+        </div>
+      </Container>
+    );
+  }
+
+  // =========================================================================
+  // GIAO DIỆN KHÁCH HÀNG & ADMIN (CUSTOMER VIEW)
+  // =========================================================================
   return (
-    <Container fluid className="py-5" style={{ backgroundColor: 'var(--bg-main)', minHeight: '100vh' }}>
-      <Container style={{ maxWidth: '1400px' }}>
+    <Container fluid className="py-4 py-md-5" style={{ backgroundColor: 'var(--bg-main)', minHeight: '100vh' }}>
+      <Container style={{ maxWidth: '950px' }}>
         
+        {/* TOP BAR */}
         <div className="d-flex justify-content-between align-items-center mb-4">
-          <h3 className="mb-0 fw-bold" style={{ color: 'var(--brand-orange)' }}>🏷️ Chi tiết đơn hàng #{id || '101'}</h3>
-          <Button variant="outline-light" onClick={() => navigate(isAdmin ? '/admin' : '/dashboard')}>⬅ Quay lại</Button>
+          <Button variant="outline-light" className="fw-bold px-3" style={{ borderColor: 'var(--border-color)' }} onClick={handleBack}>
+            ⬅ Quay về
+          </Button>
+          <span className="text-muted fw-bold">Mã đơn: #{order.id}</span>
         </div>
 
-        {/* THANH TIẾN TRÌNH */}
-        <div className="logistics-card mb-4 p-4 text-center">
-          <h6 className="fw-bold text-muted mb-4 text-uppercase tracking-wide">Tiến trình vận đơn</h6>
-          <div className="d-flex justify-content-between align-items-center position-relative mx-auto" style={{ maxWidth: '800px' }}>
-              <div style={{ position: 'absolute', top: '50%', left: '10%', right: '10%', height: '4px', background: 'var(--border-color)', zIndex: 0 }}></div>
-              <Badge bg={['arrived_pickup', 'picking_up', 'delivering', 'completed'].includes(orderState) ? "success" : "secondary"} className="p-3 rounded-circle position-relative z-index-1" style={{ width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', backgroundColor: ['arrived_pickup', 'picking_up', 'delivering', 'completed'].includes(orderState) ? 'var(--brand-orange) !important' : 'var(--border-color)' }}>1</Badge>
-              <Badge bg={['delivering', 'completed'].includes(orderState) ? "success" : ['arrived_pickup', 'picking_up'].includes(orderState) ? "warning" : "secondary"} text="dark" className="p-3 rounded-circle position-relative z-index-1 border border-dark" style={{ width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', backgroundColor: ['delivering', 'completed'].includes(orderState) ? 'var(--brand-orange) !important' : '' }}>2</Badge>
-              <Badge bg={orderState === 'completed' ? "success" : orderState === 'delivering' ? "primary" : "secondary"} text="light" className="p-3 rounded-circle position-relative z-index-1 border border-dark" style={{ width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', backgroundColor: orderState === 'completed' ? 'var(--brand-orange) !important' : '' }}>3</Badge>
+        {/* TIẾN TRÌNH ĐƠN HÀNG */}
+        <div className="logistics-card p-4 mb-4" style={{ borderTop: '4px solid var(--brand-orange)' }}>
+          <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div>
+              <h4 className="text-white fw-bold mb-1">Theo dõi đơn hàng #{order.id}</h4>
+              <small className="text-muted">Khởi tạo lúc: {order.createdAt}</small>
+            </div>
+            <Badge bg={order.status === 'completed' ? 'success' : order.status === 'delivering' ? 'warning' : 'info'} className="px-3 py-2 fs-6">
+              {order.status.toUpperCase()}
+            </Badge>
+          </div>
+
+          <div className="mt-4">
+            <small className="text-muted d-block mb-2 fw-bold">Tiến trình vận chuyển</small>
+            <ProgressBar animated={order.status === 'delivering'} variant="warning" now={order.status === 'completed' ? 100 : order.status === 'delivering' ? 75 : 50} style={{ height: '10px', backgroundColor: 'var(--bg-input)' }} />
           </div>
         </div>
 
-        <Row className="g-4 align-items-stretch">
-          <Col lg={7} xl={8} className="d-flex flex-column gap-4">
-            
-            {/* LỘ TRÌNH CÔNG VIỆC */}
-            <div className="logistics-card overflow-hidden">
-              <div className="text-white border-bottom py-3 px-4 d-flex align-items-center" style={{ backgroundColor: 'var(--brand-orange)', borderColor: 'var(--border-color) !important' }}>
-                <h5 className="mb-0 fw-bold text-dark">📦 Lộ Trình Công Việc (Demo)</h5>
+        <Row className="g-4 mb-4">
+          {/* LỘ TRÌNH GIAO HÀNG */}
+          <Col md={7}>
+            <div className="logistics-card p-4 h-100">
+              <h5 className="text-white fw-bold mb-4">📍 Lộ trình giao hàng</h5>
+              
+              <div className="mb-4">
+                <small className="text-muted d-block fw-bold mb-1">ĐIỂM LẤY HÀNG</small>
+                <div className="text-white fw-bold fs-6">📍 {order.pickup}</div>
+                <small className="text-muted">Người gửi: {order.senderName} ({order.senderPhone})</small>
               </div>
-              <div className="p-4">
-                
-                <h6 className="fw-bold mb-3 d-flex align-items-center gap-2" style={{ color: '#FF4D4D' }}><span className="fs-5">📍</span> NHIỆM VỤ LẤY HÀNG</h6>
-                <div className="p-3 mb-4 rounded border" style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-color) !important', borderLeft: '4px solid #FF4D4D !important' }}>
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <strong className="text-white fs-5">Mã #{id || '101'}</strong>
-                    {getStatusBadge(orderState)}
-                  </div>
-                  <div className="mb-3 text-muted"><strong>Địa chỉ:</strong> <span className="text-white">Trường Đại học Sài Gòn</span></div>
-                  
-                  {isDriverOwner && !['completed'].includes(orderState) && (
-                    <div className="mt-3">
-                      {orderState === 'accepted' && (
-                         <SwipeButton text="Quẹt xác nhận: Đã tới điểm đến" colorClass="danger" onComplete={() => handleUpdateStatus('arrived_pickup')} />
-                      )}
-                      {orderState === 'arrived_pickup' && (
-                         <SwipeButton text="Quẹt xác nhận: Đã lấy hàng" colorClass="danger" onComplete={() => handleUpdateStatus('picking_up')} />
-                      )}
-                    </div>
-                  )}
-                </div>
 
-                <hr className="my-4" style={{ borderColor: 'var(--border-color)' }} />
+              <div className="mb-4">
+                <small className="text-muted d-block fw-bold mb-1">ĐIỂM GIAO HÀNG</small>
+                <div className="text-white fw-bold fs-6">🚩 {order.dropoff}</div>
+                <small className="text-muted">Người nhận: {order.receiverName} ({order.receiverPhone})</small>
+              </div>
 
-                <h6 className="fw-bold mb-3 d-flex align-items-center gap-2" style={{ color: '#4ADE80' }}><span className="fs-5">🚩</span> NHIỆM VỤ GIAO HÀNG</h6>
-                <div className="p-3 mb-4 rounded border" style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-color) !important', borderLeft: '4px solid #4ADE80 !important' }}>
-                  <div className="mb-2 text-muted"><strong>Địa chỉ:</strong> <span className="text-white">Landmark 81, Bình Thạnh</span></div>
-                  
-                  {isDriverOwner && ['picking_up', 'delivering'].includes(orderState) && (
-                    <div className="mt-3">
-                      {orderState === 'picking_up' && (
-                         <SwipeButton text="Quẹt xác nhận: Đã tới điểm giao" colorClass="success" onComplete={() => handleUpdateStatus('delivering')} />
-                      )}
-                      {orderState === 'delivering' && (
-                         <SwipeButton text="Quẹt xác nhận: Hoàn thành đơn" colorClass="success" onComplete={() => setShowPodModal(true)} />
-                      )}
-                    </div>
-                  )}
-                </div>
-
+              <div className="pt-3 border-top" style={{ borderColor: 'var(--border-color)' }}>
+                <small className="text-muted d-block fw-bold mb-1">GHI CHÚ HÀNG HÓA</small>
+                <span className="text-white">{order.packageDetails}</span>
               </div>
             </div>
-            
           </Col>
 
-          {/* CỘT PHẢI: KHUNG CHAT */}
-          <Col lg={5} xl={4} className="d-flex flex-column">
-             <div className="h-100">
-                <OrderChatBox userInfo={userInfo} isChatDisabled={orderState === 'completed'} />
-             </div>
+          {/* TÀI XẾ & CƯỚC PHÍ & NÚT ĐÁNH GIÁ */}
+          <Col md={5}>
+            
+            {/* THÔNG TIN TÀI XẾ */}
+            <div className="logistics-card p-4 mb-4 border-start border-4 border-info">
+              <small className="text-muted fw-bold d-block mb-2 text-uppercase" style={{ fontSize: '11px' }}>Tài xế nhận chuyến</small>
+              
+              {order.driver && order.status !== 'pending' ? (
+                <div>
+                  <div className="d-flex align-items-center gap-3 mb-3">
+                    <div className="rounded-circle d-flex justify-content-center align-items-center border" style={{ width: '48px', height: '48px', backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-color)', fontSize: '20px' }}>
+                      🛵
+                    </div>
+                    <div>
+                      <h6 className="text-white fw-bold mb-0">{order.driver.name}</h6>
+                      <small className="text-info fw-bold">{order.driver.licensePlate}</small>
+                      <div className="text-warning fw-bold" style={{ fontSize: '12px' }}>{order.driver.rating}</div>
+                    </div>
+                  </div>
+
+                  <div className="d-flex gap-2 pt-2 border-top" style={{ borderColor: 'var(--border-color)' }}>
+                    <a href={`tel:${order.driver.phone}`} className="btn btn-sm btn-outline-success fw-bold flex-grow-1 py-2">
+                      📞 Gọi điện
+                    </a>
+                    <Button size="sm" className="btn-orange fw-bold flex-grow-1 py-2" onClick={() => setShowChatModal(true)}>
+                      💬 Chat ngay
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-muted py-2 fst-italic">
+                  🔍 Đang hệ thống ghép nối tài xế gần bạn nhất...
+                </div>
+              )}
+            </div>
+
+            {/* KHỐI ĐÁNH GIÁ TÀI XẾ (KHI ĐƠN HOÀN THÀNH) */}
+            {order.status === 'completed' && (
+              <div className="logistics-card p-4 mb-4 text-center" style={{ border: '1px solid var(--brand-orange)', backgroundColor: 'rgba(255, 107, 0, 0.05)' }}>
+                <h6 className="text-white fw-bold mb-2">⭐ ĐÁNH GIÁ TÀI XẾ</h6>
+                <p className="text-muted mb-3" style={{ fontSize: '12px' }}>
+                  Chuyến đi đã hoàn thành. Hãy để lại đánh giá về tài xế nhé!
+                </p>
+                {hasRated ? (
+                  <Badge bg="success" className="px-3 py-2 fs-6">✅ Bạn đã gửi đánh giá</Badge>
+                ) : (
+                  <Button className="btn-orange fw-bold w-100 py-2" onClick={() => setShowRatingModal(true)}>
+                    ⭐ Viết Đánh Giá (1 - 5 Sao)
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* CHI TIẾT CƯỚC PHÍ */}
+            <div className="logistics-card p-4">
+              <h6 className="text-muted fw-bold mb-3 text-uppercase" style={{ fontSize: '12px' }}>Chi tiết cước phí</h6>
+              <div className="d-flex justify-content-between text-muted mb-2">
+                <span>Cước vận chuyển ({order.distance} km)</span>
+                <span className="text-white">{order.basePrice.toLocaleString()}đ</span>
+              </div>
+              <div className="d-flex justify-content-between text-muted mb-2">
+                <span>Phụ phí dịch vụ</span>
+                <span className="text-white">{order.extraFee.toLocaleString()}đ</span>
+              </div>
+              <hr style={{ borderColor: 'var(--border-color)' }} />
+              <div className="d-flex justify-content-between align-items-center">
+                <span className="text-white fw-bold">TỔNG CƯỚC PHÍ</span>
+                <h4 className="fw-bold mb-0" style={{ color: '#4ADE80' }}>{order.totalPrice.toLocaleString()}đ</h4>
+              </div>
+              <small className="text-muted d-block mt-2">Thanh toán: {order.paymentMethod}</small>
+            </div>
+
           </Col>
         </Row>
 
-        {/* MODALS */}
-        <Modal show={showReviewModal} onHide={() => setShowReviewModal(false)} centered contentClassName="logistics-card border-0">
+        {/* MODAL CHAT KHÁCH HÀNG */}
+        <Modal show={showChatModal} onHide={() => setShowChatModal(false)} centered contentClassName="logistics-card border-0">
           <Modal.Header closeButton className="border-bottom" style={{ borderColor: 'var(--border-color)' }}>
-            <Modal.Title className="fw-bold text-white">🎉 Chuyến đi hoàn tất!</Modal.Title>
+            <Modal.Title className="fw-bold text-white fs-6">💬 Trao đổi với Tài xế #{order.id}</Modal.Title>
           </Modal.Header>
-          <Form onSubmit={(e) => { e.preventDefault(); alert("Cảm ơn bạn đã đánh giá!"); setShowReviewModal(false); }}>
-            <Modal.Body className="text-center p-4">
-              <h5 className="mb-4 text-white">Tài xế phục vụ bạn thế nào?</h5>
-              <div className="mb-4 fs-1" style={{ cursor: 'pointer' }}>
-                <span style={{ color: '#ffc107', margin: '0 5px' }}>★</span>
-                <span style={{ color: '#ffc107', margin: '0 5px' }}>★</span>
-                <span style={{ color: '#ffc107', margin: '0 5px' }}>★</span>
-                <span style={{ color: '#ffc107', margin: '0 5px' }}>★</span>
-                <span style={{ color: '#ffc107', margin: '0 5px' }}>★</span>
-              </div>
-            </Modal.Body>
-            <Modal.Footer className="justify-content-center border-top" style={{ borderColor: 'var(--border-color)' }}>
-              <Button type="submit" className="btn-orange px-5 py-2 fw-bold w-100">Gửi Đánh Giá Ngay</Button>
-            </Modal.Footer>
-          </Form>
+          <Modal.Body className="p-3">
+            <div className="p-3 mb-3 rounded" style={{ height: '280px', overflowY: 'auto', backgroundColor: 'var(--bg-main)' }}>
+              {chatMessages.map((msg, index) => (
+                <div key={index} className={`d-flex mb-2 ${msg.sender === 'customer' ? 'justify-content-end' : 'justify-content-start'}`}>
+                  <div className={`p-2 px-3 rounded-3 ${msg.sender === 'customer' ? 'text-white' : 'text-white border'}`} style={{ backgroundColor: msg.sender === 'customer' ? 'var(--brand-orange)' : 'var(--bg-card)', borderColor: 'var(--border-color)', fontSize: '13px' }}>
+                    {msg.text}
+                  </div>
+                </div>
+              ))}
+              <div ref={chatEndRef} />
+            </div>
+            <Form onSubmit={handleSendMessage}>
+              <InputGroup>
+                <Form.Control type="text" className="logistics-input" placeholder="Nhập tin nhắn..." value={chatInput} onChange={e => setChatInput(e.target.value)} />
+                <Button type="submit" className="btn-orange fw-bold">Gửi</Button>
+              </InputGroup>
+            </Form>
+          </Modal.Body>
         </Modal>
 
-        <Modal show={showPodModal} onHide={() => setShowPodModal(false)} centered backdrop="static" contentClassName="logistics-card border-0">
+        {/* MODAL ĐÁNH GIÁ TÀI XẾ 1-5 SAO */}
+        <Modal show={showRatingModal} onHide={() => setShowRatingModal(false)} centered contentClassName="logistics-card border-0">
           <Modal.Header closeButton className="border-bottom" style={{ borderColor: 'var(--border-color)' }}>
-            <Modal.Title className="fw-bold text-white">📸 CHỤP ẢNH BẰNG CHỨNG GIAO HÀNG</Modal.Title>
+            <Modal.Title className="fw-bold text-white fs-5">⭐ Đánh Giá Chuyến Đi #{order.id}</Modal.Title>
           </Modal.Header>
-          <Form onSubmit={handleCompleteWithPod}>
-            <Modal.Body className="text-center p-4">
-              <Form.Control type="file" className="logistics-input" accept="image/*" capture="environment" required />
+          <Form onSubmit={handleSubmitRating}>
+            <Modal.Body className="p-4 text-center">
+              <h6 className="text-white mb-3">Chất lượng phục vụ của tài xế thế nào?</h6>
+              
+              {/* NÚT CHỌN SAO */}
+              <div className="d-flex justify-content-center gap-2 mb-4">
+                {[1, 2, 3, 4, 5].map(star => (
+                  <Button 
+                    key={star} 
+                    variant={ratingStars >= star ? "warning" : "dark"} 
+                    className="px-3 py-2 fs-4 border" 
+                    style={{ borderColor: 'var(--border-color)' }}
+                    onClick={() => setRatingStars(star)}
+                  >
+                    ⭐
+                  </Button>
+                ))}
+              </div>
+              
+              <div className="fw-bold fs-5 mb-3" style={{ color: ratingStars <= 2 ? '#FF4D4D' : '#4ADE80' }}>
+                {ratingStars === 1 && "🚨 1 Sao - Rất tệ (Báo cáo Admin xử lý)"}
+                {ratingStars === 2 && "⚠️ 2 Sao - Không hài lòng"}
+                {ratingStars === 3 && "😐 3 Sao - BÌnh thường"}
+                {ratingStars === 4 && "🙂 4 Sao - Tốt"}
+                {ratingStars === 5 && "🎉 5 Sao - Xuất sắc!"}
+              </div>
+
+              <Form.Control 
+                as="textarea" 
+                rows={3} 
+                className="logistics-input" 
+                placeholder="Nhập nhận xét chi tiết (bắt buộc nếu 1-2 sao)..." 
+                value={ratingFeedback} 
+                onChange={e => setRatingFeedback(e.target.value)} 
+                required={ratingStars <= 2}
+              />
             </Modal.Body>
-            <Modal.Footer className="justify-content-center border-top" style={{ borderColor: 'var(--border-color)' }}>
-              <Button variant="success" type="submit" className="fw-bold px-5">📤 HOÀN THÀNH</Button>
+            <Modal.Footer className="border-top" style={{ borderColor: 'var(--border-color)' }}>
+              <Button variant="outline-secondary" onClick={() => setShowRatingModal(false)}>Hủy</Button>
+              <Button type="submit" className="btn-orange px-4 fw-bold">Gửi Đánh Giá</Button>
             </Modal.Footer>
           </Form>
         </Modal>

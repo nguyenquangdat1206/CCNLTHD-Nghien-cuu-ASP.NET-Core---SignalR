@@ -1,182 +1,195 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Container, Button, Badge, Modal, Form, Row, Col, Nav } from 'react-bootstrap';
+import React, { useState, useEffect } from 'react';
+import { Container, Button, Modal, Form, Nav, Badge, ListGroup } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
-import SupportWidget from '../../components/SupportWidget';
-import SwipeButton from '../../components/SwipeButton';
-
-import 'leaflet/dist/leaflet.css';
 import { MapContainer, TileLayer, Marker, Circle, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import DashboardSkeleton from '../../components/DashboardSkeleton';
+
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
-let DefaultIcon = L.icon({
-    iconUrl: icon,
-    shadowUrl: iconShadow,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41]
-});
+let DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
 
 export default function DriverDashboard({ userInfo }) {
   const navigate = useNavigate();
-  const [mainTab, setMainTab] = useState('radar'); 
-  const [driverTab, setDriverTab] = useState('active'); 
-  const [isReady, setIsReady] = useState(false);
-  const [driverLocation, setDriverLocation] = useState({ lat: 10.762622, lng: 106.660172 });
+  const [loading, setLoading] = useState(true);
+  const [isReady, setIsReady] = useState(true);
+  const [driverLocation, setDriverLocation] = useState({ lat: 10.7626, lng: 106.6601 });
+  const [mainTab, setMainTab] = useState('radar');
+  const [tripSubTab, setTripSubTab] = useState('active');
 
-  // Dữ liệu giả lập
-  const [pendingOrders, setPendingOrders] = useState([]);
-  const [myOrders, setMyOrders] = useState([]); 
-  const [showIncomingPopup, setShowIncomingPopup] = useState(false);
-  const [incomingOrder, setIncomingOrder] = useState(null);
-  const audioRef = useRef(null);
+  const [showMenuModal, setShowMenuModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
-  // GIẢ LẬP RADAR BẮT ĐƠN: Khi bật "ĐANG NHẬN ĐƠN", sau 3 giây sẽ tự động nổ 1 đơn
-  useEffect(() => {
-    let timer;
-    if (isReady && pendingOrders.length === 0) {
-      timer = setTimeout(() => {
-        const fakeOrder = { id: 101, pickup: 'Trường Đại học Sài Gòn', dropoff: 'Landmark 81, Bình Thạnh', calculated_price: 65000, is_batch: false, ids: [101] };
-        setPendingOrders([fakeOrder]);
-        setIncomingOrder(fakeOrder);
-        setShowIncomingPopup(true);
-        // Phát âm thanh
-        if (!audioRef.current) {
-            const audio = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
-            audio.loop = true; audio.play().catch(e=>e); 
-            audioRef.current = audio;
-        }
-      }, 3000);
+  const [profileData, setProfileData] = useState({
+    name: userInfo?.name || 'Tài Xế Partner',
+    phone: userInfo?.phone || '0868923294',
+    license_plate: userInfo?.license_plate || '51H-264.39'
+  });
+
+  const [activeOrders] = useState([
+    {
+      id: 201,
+      pickup: 'Đại học Sài Gòn (273 An Dương Vương, Q.5)',
+      dropoff: 'Landmark 81 (720A Điện Biên Phủ, Q.Bình Thạnh)',
+      price: 65000,
+      status: 'delivering',
+      sender: 'Nguyễn Quang Đạt',
+      receiver: 'Trần Thị B',
+      distance: '8.5'
+    },
+    {
+      id: 202,
+      pickup: 'Chợ Bến Thành (Lê Lợi, Q.1)',
+      dropoff: 'Sân bay Tân Sơn Nhất (Q.Tân Bình)',
+      price: 120000,
+      status: 'picking_up',
+      sender: 'Lê Văn C',
+      receiver: 'Phạm Văn D',
+      distance: '7.2'
     }
-    return () => clearTimeout(timer);
-  }, [isReady]);
+  ]);
 
-  const handleToggleReady = () => setIsReady(!isReady);
+  const [historyOrders] = useState([
+    { id: 198, pickup: 'Quận 10, TP.HCM', dropoff: 'Quận 3, TP.HCM', price: 45000, status: 'completed', distance: '3.5' },
+    { id: 199, pickup: 'Khu công nghệ cao, TP.Thủ Đức', dropoff: 'Đường D2, Q.Bình Thạnh', price: 85000, status: 'completed', distance: '9.0' }
+  ]);
 
-  const stopAlertSound = () => { if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } };
+  useEffect(() => {
+    setTimeout(() => setLoading(false), 500);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((pos) => setDriverLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }));
+    }
+  }, []);
 
-  const handleAcceptOrder = (orderId) => {
-    // Giả lập chuyển đơn hàng từ Pending sang Chuyến Của Tôi
-    const acceptedOrder = pendingOrders.find(o => o.ids[0] === orderId);
-    setMyOrders([{...acceptedOrder, status: 'accepted'}]);
-    setPendingOrders([]);
-    setMainTab('my_trips'); 
-    setDriverTab('active');
+  const handleSaveProfile = (e) => {
+    e.preventDefault();
+    const updatedUser = { ...userInfo, ...profileData };
+    localStorage.setItem('userInfo', JSON.stringify(updatedUser));
+    setShowProfileModal(false);
+    alert('✅ Đã cập nhật thông tin tài xế thành công!');
   };
 
-  const handleLogout = () => { stopAlertSound(); localStorage.removeItem('userInfo'); navigate('/login'); };
-
-  const renderOrderCard = (order, isHistory) => {
-    const driverEarnings = order.calculated_price * 0.8;
-    return (
-      <div 
-          key={order.ids[0]} 
-          className="logistics-card overflow-hidden p-0 shadow-sm transition-hover"
-          style={{ cursor: 'pointer', border: '1px solid var(--border-color)', opacity: isHistory ? 0.8 : 1 }}
-          onClick={() => navigate(`/order/${order.ids[0]}`)}
-      >
-        <div className="p-3 border-bottom" style={{ borderColor: 'var(--border-color)', backgroundColor: 'rgba(255,255,255,0.02)' }}>
-          <div className="d-flex justify-content-between align-items-center mb-1">
-            <h5 className="text-danger fw-bold mb-0">Mã: #{order.id}</h5>
-            <Badge bg="success" className="px-2 py-1">{isHistory ? 'Đã hoàn thành' : 'Đang xử lý'}</Badge>
-          </div>
-          <div className="text-white fw-bold fs-5 mt-1">{driverEarnings.toLocaleString()}đ</div>
-        </div>
-        <div className="p-3 position-relative">
-           <div className="d-flex mb-4">
-              <div className="me-3 mt-1"><div style={{width:'14px', height:'14px', borderRadius:'50%', backgroundColor: '#FF4D4D'}}></div></div>
-              <div className="flex-grow-1">
-                 <div className="text-muted fw-bold">Điểm Lấy:</div>
-                 <div className="text-white mb-2 fw-bold">{order.pickup}</div>
-              </div>
-           </div>
-           <div className="d-flex position-relative">
-              <div className="me-3 mt-1"><div style={{width:'14px', height:'14px', borderRadius:'50%', backgroundColor: '#4ADE80'}}></div></div>
-              <div className="flex-grow-1">
-                 <div className="text-muted fw-bold">Điểm Giao:</div>
-                 <div className="text-white mb-2 fw-bold">{order.dropoff}</div>
-              </div>
-           </div>
-        </div>
-      </div>
-    );
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'picking_up': return <Badge bg="warning" className="px-2 py-1 text-dark">Đang tới lấy hàng</Badge>;
+      case 'delivering': return <Badge style={{ backgroundColor: 'var(--brand-orange)' }} className="px-2 py-1 text-white">Đang giao hàng</Badge>;
+      case 'completed': return <Badge bg="success" className="px-2 py-1">Đã hoàn thành</Badge>;
+      case 'cancelled': return <Badge bg="danger" className="px-2 py-1">Đã hủy</Badge>;
+      default: return <Badge bg="secondary" className="px-2 py-1">{status}</Badge>;
+    }
   };
+
+  if (loading) return <DashboardSkeleton />;
 
   return (
-    <Container fluid className="py-5" style={{ backgroundColor: 'var(--bg-main)', minHeight: '100vh' }}>
-      <Container style={{ maxWidth: '900px' }}>
+    <Container fluid className="py-2 py-md-4" style={{ backgroundColor: 'var(--bg-main)', minHeight: '100vh' }}>
+      <div style={{ maxWidth: '440px', margin: '0 auto' }}>
         
-        {/* HEADER */}
-        <div className="logistics-card p-4 mb-4 d-flex justify-content-between align-items-center flex-wrap" style={{ borderTop: '4px solid var(--brand-orange)' }}>
-          <div className="d-flex align-items-center mb-3 mb-md-0">
-            <div style={{width: '60px', height: '60px', borderRadius: '12px', backgroundColor: 'var(--bg-input)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '15px', fontSize: '24px', border: '1px solid var(--border-color)'}}>🛵</div>
+        <div 
+          className="logistics-card p-3 mb-3 d-flex justify-content-between align-items-center transition-hover" 
+          style={{ borderTop: '4px solid var(--brand-orange)', cursor: 'pointer' }}
+          onClick={() => setShowMenuModal(true)}
+        >
+          <div className="d-flex align-items-center gap-3">
+            <div className="rounded-circle d-flex justify-content-center align-items-center border position-relative" style={{ width: '46px', height: '46px', backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-color)', fontSize: '20px' }}>
+              🛵
+              <span className="position-absolute bottom-0 end-0 p-1 rounded-circle border border-dark" style={{ backgroundColor: isReady ? '#4ADE80' : '#888', width: '12px', height: '12px' }}></span>
+            </div>
             <div>
-              <h5 className="mb-1 fw-bold text-white">{userInfo?.name}</h5>
-              <div className="d-flex align-items-center gap-2">
-                <Badge bg="dark" className="border border-secondary text-white px-2 py-1">XE MÁY</Badge>
-                <Badge bg="success" className="px-2 py-1 cursor-pointer fw-bold border border-success" onClick={() => navigate('/wallet')}>💰 500.000đ</Badge>
-              </div>
+              <h6 className="text-white fw-bold mb-0">{profileData.name}</h6>
+              <small className="text-warning fw-bold" style={{ fontSize: '11px' }}>🚘 {profileData.license_plate}</small>
             </div>
           </div>
-          <Button variant="outline-danger" onClick={handleLogout}>Thoát</Button>
+          
+          <div className="d-flex align-items-center gap-2">
+            <Badge bg={isReady ? "success" : "secondary"} className="px-2 py-1" style={{ fontSize: '11px' }}>
+              {isReady ? 'ONLINE' : 'OFFLINE'}
+            </Badge>
+            <span className="text-muted fs-5">⚙️</span>
+          </div>
         </div>
 
-        {/* NÚT ONLINE/OFFLINE */}
-        <div className="logistics-card p-4 mb-4 text-center">
-            <h6 className="text-muted text-uppercase fw-bold mb-3 tracking-wide" style={{ fontSize: '13px' }}>TRẠNG THÁI HOẠT ĐỘNG</h6>
-            <div className="d-flex justify-content-center">
-                <Button className={`fw-bold px-5 py-3 ${isReady ? 'btn-orange shadow-lg' : 'btn-secondary text-white'}`} style={{ borderRadius: '30px', border: 'none', minWidth: '280px', backgroundColor: isReady ? 'var(--brand-orange)' : '#333' }} onClick={handleToggleReady}>
-                    {isReady ? '🟢 ĐANG NHẬN ĐƠN (ONLINE)' : '😴 ĐANG NGHỈ NGƠI (OFFLINE)'}
-                </Button>
-            </div>
+        <div className="logistics-card mb-3 p-1 border-0">
+          <Nav variant="pills" className="nav-fill gap-1" activeKey={mainTab} onSelect={(k) => setMainTab(k)}>
+            <Nav.Item>
+              <Nav.Link eventKey="radar" className={`fw-bold py-2 ${mainTab === 'radar' ? 'btn-orange text-white' : 'text-muted'}`} style={{ borderRadius: '10px', fontSize: '13px' }}>
+                📡 Radar Đơn
+              </Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link eventKey="my_trips" className={`fw-bold py-2 ${mainTab === 'my_trips' ? 'btn-orange text-white' : 'text-muted'}`} style={{ borderRadius: '10px', fontSize: '13px' }}>
+                🏍️ Chuyến Của Tôi ({activeOrders.length})
+              </Nav.Link>
+            </Nav.Item>
+          </Nav>
         </div>
 
-        {/* TABS ĐIỀU HƯỚNG */}
-        <div className="logistics-card mb-4 p-2 border-0">
-            <Nav variant="pills" className="justify-content-center gap-2" activeKey={mainTab} onSelect={(k) => setMainTab(k)}>
-              <Nav.Item><Nav.Link eventKey="radar" className={`fw-bold text-uppercase px-4 ${mainTab === 'radar' ? 'btn-orange text-white' : 'text-muted'}`}>📡 Bắt Đơn Mới</Nav.Link></Nav.Item>
-              <Nav.Item><Nav.Link eventKey="my_trips" className={`fw-bold text-uppercase px-4 ${mainTab === 'my_trips' ? 'btn-orange text-white' : 'text-muted'}`}>🏍️ Chuyến Của Tôi</Nav.Link></Nav.Item>
-            </Nav>
-        </div>
-        
-        {/* NỘI DUNG TAB RADAR */}
         {mainTab === 'radar' && (
-          <div className="mt-2">
-            {isReady && (
-              <div className="logistics-card p-3 mb-4" style={{ border: '1px solid var(--border-color)', borderRadius: '16px', overflow: 'hidden' }}>
-                <h6 className="fw-bold text-white mb-3">📡 RADAR QUÉT ĐƠN (1.5KM)</h6>
-                <div style={{ height: '250px', width: '100%', borderRadius: '12px', overflow: 'hidden' }}>
-                  <MapContainer center={[driverLocation.lat, driverLocation.lng]} zoom={14} style={{ height: '100%', width: '100%' }} zoomControl={false}>
-                    <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-                    <Marker position={[driverLocation.lat, driverLocation.lng]}><Popup>Vị trí của bạn</Popup></Marker>
-                    <Circle center={[driverLocation.lat, driverLocation.lng]} radius={1500} pathOptions={{ color: '#FF6633', fillColor: '#FF6633', fillOpacity: 0.15, weight: 2 }} />
-                  </MapContainer>
+          <div className="logistics-card p-2 mb-3" style={{ border: '1px solid var(--border-color)', borderRadius: '12px' }}>
+            <small className="fw-bold text-white mb-2 d-block px-1">📡 RADAR BẮT ĐƠN TỰ ĐỘNG (1.5KM)</small>
+            <div style={{ height: '320px', width: '100%', borderRadius: '10px', overflow: 'hidden', opacity: isReady ? 1 : 0.4 }}>
+              <MapContainer center={[driverLocation.lat, driverLocation.lng]} zoom={14} style={{ height: '100%', width: '100%' }} zoomControl={false}>
+                <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+                <Marker position={[driverLocation.lat, driverLocation.lng]}><Popup>Vị trí tài xế</Popup></Marker>
+                <Circle center={[driverLocation.lat, driverLocation.lng]} radius={1500} pathOptions={{ color: '#FF6633', fillColor: '#FF6633', fillOpacity: 0.15, weight: 2 }} />
+              </MapContainer>
+            </div>
+            {!isReady && <small className="text-danger d-block text-center mt-2 fw-bold">Hãy mở Menu để chuyển sang trạng thái ONLINE!</small>}
+          </div>
+        )}
+
+        {mainTab === 'my_trips' && (
+          <div>
+            <div className="d-flex justify-content-center gap-2 mb-3">
+              <Button size="sm" className={`fw-bold px-3 py-1 ${tripSubTab === 'active' ? 'btn-orange text-white' : 'btn-dark text-muted border border-secondary'}`} style={{ borderRadius: '20px', fontSize: '12px' }} onClick={() => setTripSubTab('active')}>
+                ⚡ Đang chạy ({activeOrders.length})
+              </Button>
+              <Button size="sm" className={`fw-bold px-3 py-1 ${tripSubTab === 'history' ? 'btn-orange text-white' : 'btn-dark text-muted border border-secondary'}`} style={{ borderRadius: '20px', fontSize: '12px' }} onClick={() => setTripSubTab('history')}>
+                📜 Lịch sử ({historyOrders.length})
+              </Button>
+            </div>
+
+            {tripSubTab === 'active' && (
+              activeOrders.length === 0 ? (
+                <div className="logistics-card p-4 text-center text-muted fw-bold">Chưa có chuyến xe nào đang chạy.</div>
+              ) : (
+                <div className="d-flex flex-column gap-3">
+                  {activeOrders.map(order => (
+                    <div key={order.id} className="logistics-card p-3 position-relative" style={{ borderLeft: '4px solid var(--brand-orange)', cursor: 'pointer' }} onClick={() => navigate(`/order/${order.id}`)}>
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <span className="fw-bold text-white fs-6">Đơn hàng #{order.id}</span>
+                        {getStatusBadge(order.status)}
+                      </div>
+                      <div className="text-white mb-1" style={{ fontSize: '13px' }}>📍 <strong>Lấy:</strong> {order.pickup}</div>
+                      <div className="text-white mb-2" style={{ fontSize: '13px' }}>🚩 <strong>Giao:</strong> {order.dropoff}</div>
+                      <div className="d-flex justify-content-between align-items-center pt-2 border-top" style={{ borderColor: 'var(--border-color)' }}>
+                        <span className="fw-bold" style={{ color: '#4ADE80', fontSize: '15px' }}>
+                          {(order.price * 0.8).toLocaleString()}đ <small className="text-muted fw-normal" style={{ fontSize: '11px' }}>(Thu nhập)</small>
+                        </span>
+                        <Button size="sm" variant="outline-light" className="fw-bold py-1" style={{ borderColor: 'var(--brand-orange)', color: 'var(--brand-orange)', fontSize: '12px' }}>
+                          Chi tiết ➔
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
+              )
             )}
-            
-            <h5 className="fw-bold text-white mb-3">📡 ĐƠN HÀNG MỚI XUNG QUANH</h5>
-            {!isReady ? (
-              <div className="logistics-card p-5 text-center text-muted fw-bold border-dashed" style={{ borderStyle: 'dashed' }}>Vui lòng bật trạng thái Đang Nhận Đơn để quét chuyến.</div>
-            ) : pendingOrders.length === 0 ? (
-              <div className="logistics-card p-5 text-center text-muted fw-bold">Hệ thống Radar đang quét tìm khách...</div>
-            ) : (
-              <div className="d-flex flex-column gap-3">
-                {pendingOrders.map((order, idx) => (
-                  <div key={idx} className="logistics-card p-4" style={{ borderLeft: '4px solid #4ADE80' }}>
-                    <div className="d-flex justify-content-between align-items-center flex-wrap">
-                      <div className="mb-3 mb-md-0" style={{ maxWidth: '600px' }}>
-                        <h6 className="fw-bold text-white mb-3">Mã: #{order.id}</h6>
-                        <div className="text-muted fs-6">
-                           <div className="mb-1"><strong>📍 Lấy:</strong> <span className="text-white">{order.pickup}</span></div>
-                           <div><strong>🚩 Giao:</strong> <span className="text-white">{order.dropoff}</span></div>
-                        </div>
-                      </div>
-                      <div className="text-end">
-                        <h3 className="fw-bold mb-3" style={{ color: '#4ADE80' }}>{order.calculated_price.toLocaleString()} đ</h3>
-                        <Button className="btn-orange px-4 fw-bold" onClick={() => handleAcceptOrder(order.ids[0])}>🤝 CHỐT ĐƠN</Button>
-                      </div>
+
+            {tripSubTab === 'history' && (
+              <div className="d-flex flex-column gap-2">
+                {historyOrders.map(order => (
+                  <div key={order.id} className="logistics-card p-3 d-flex justify-content-between align-items-center" style={{ opacity: 0.85, cursor: 'pointer' }} onClick={() => navigate(`/order/${order.id}`)}>
+                    <div>
+                      <div className="fw-bold text-white mb-1" style={{ fontSize: '13px' }}>Đơn #{order.id} ({order.distance} km)</div>
+                      <div className="text-muted" style={{ fontSize: '12px' }}>📍 {order.pickup} ➔ 🚩 {order.dropoff}</div>
+                    </div>
+                    <div className="text-end">
+                      <div className="fw-bold text-success mb-1" style={{ fontSize: '13px' }}>+{(order.price * 0.8).toLocaleString()}đ</div>
+                      {getStatusBadge(order.status)}
                     </div>
                   </div>
                 ))}
@@ -185,53 +198,69 @@ export default function DriverDashboard({ userInfo }) {
           </div>
         )}
 
-        {/* NỘI DUNG TAB CHUYẾN ĐI CỦA TÔI */}
-        {mainTab === 'my_trips' && (
-          <div className="mt-2">
-            <Nav variant="pills" className="gap-2 mb-4" activeKey={driverTab} onSelect={(k) => setDriverTab(k)}>
-              <Nav.Item><Nav.Link eventKey="active" className={`fw-bold px-3 py-1 ${driverTab === 'active' ? 'btn-orange text-white' : 'text-muted border'}`} style={{ borderRadius: '20px', borderColor: 'var(--border-color)', fontSize: '13px' }}>Đang chạy</Nav.Link></Nav.Item>
-              <Nav.Item><Nav.Link eventKey="history" className={`fw-bold px-3 py-1 ${driverTab === 'history' ? 'btn-orange text-white' : 'text-muted border'}`} style={{ borderRadius: '20px', borderColor: 'var(--border-color)', fontSize: '13px' }}>Lịch sử</Nav.Link></Nav.Item>
-            </Nav>
-            
-            {driverTab === 'active' && (
-               myOrders.length === 0 ? <div className="logistics-card p-4 text-center text-muted fw-bold">Bạn chưa nhận chuyến xe nào.</div>
-               : <div className="d-flex flex-column gap-3">{myOrders.map(o => renderOrderCard(o, false))}</div>
-            )}
-          </div>
-        )}
+        <Modal show={showMenuModal} onHide={() => setShowMenuModal(false)} centered contentClassName="logistics-card border-0">
+          <Modal.Header closeButton className="border-bottom" style={{ borderColor: 'var(--border-color)' }}>
+            <Modal.Title className="fw-bold text-white fs-5">⚙️ Cài Đặt Tài Khoản</Modal.Title>
+          </Modal.Header>
+          <Modal.Body className="p-3">
+            <div className="p-3 rounded-3 mb-3 text-center" style={{ backgroundColor: 'var(--bg-input)' }}>
+              <h6 className="text-white fw-bold mb-1">{profileData.name}</h6>
+              <small className="text-muted d-block">SĐT: {profileData.phone}</small>
+              <small className="text-warning fw-bold">Biển số: {profileData.license_plate}</small>
+            </div>
 
-        {/* POPUP NỔ ĐƠN TOÀN MÀN HÌNH */}
-        <Modal show={showIncomingPopup} onHide={() => {}} backdrop="static" centered size="lg" contentClassName="border-0 bg-transparent">
-           <div className="p-1 rounded-4 shadow-lg" style={{ background: 'linear-gradient(45deg, #FF4D4D, #FF6633, #4ADE80)', animation: 'pulse-border 1.5s infinite' }}>
-             <div className="logistics-card p-4 p-md-5 text-center rounded-4 border-0">
-               <h2 className="fw-bold mb-4 text-white">🚨 CÓ ĐƠN HÀNG MỚI! 🚨</h2>
-               {incomingOrder && (
-                 <div className="bg-dark p-4 rounded-3 mb-4 border" style={{ borderColor: 'var(--border-color)' }}>
-                   <div className="d-flex flex-column align-items-center mb-4">
-                       <div className="text-muted fw-bold mb-2">ĐIỂM LẤY HÀNG</div>
-                       <h5 className="text-white fw-bold px-3">{incomingOrder.pickup}</h5>
-                       <div className="my-3 text-warning fs-3">⬇</div>
-                       <div className="text-muted fw-bold mb-2">ĐIỂM GIAO HÀNG</div>
-                       <h5 className="text-white fw-bold px-3">{incomingOrder.dropoff}</h5>
-                   </div>
-                   <div className="border-top pt-4" style={{ borderColor: 'var(--border-color) !important' }}>
-                      <div className="text-muted fw-bold mb-1">THU NHẬP DỰ KIẾN</div>
-                      <div className="fw-bold" style={{ fontSize: '3.5rem', color: '#4ADE80' }}>{(incomingOrder.calculated_price * 0.8).toLocaleString()} đ</div>
-                   </div>
-                 </div>
-               )}
-               <Row className="g-3 justify-content-center">
-                 <Col xs={12} md={5}>
-                    <Button variant="outline-light" size="lg" className="w-100 fw-bold py-3" onClick={() => { stopAlertSound(); setShowIncomingPopup(false); setPendingOrders([]); }}>BỎ QUA</Button>
-                 </Col>
-                 <Col xs={12} md={7}>
-                    <Button size="lg" className="btn-orange fw-bold py-3 w-100 fs-4 shadow-lg" onClick={() => { stopAlertSound(); setShowIncomingPopup(false); handleAcceptOrder(incomingOrder.id); }}>🤝 NHẬN CUỐC NGAY</Button>
-                 </Col>
-               </Row>
-             </div>
-           </div>
+            <ListGroup variant="flush" className="bg-transparent">
+              <ListGroup.Item action className="d-flex justify-content-between align-items-center p-3 mb-2 rounded-3 text-white border-0" style={{ backgroundColor: 'var(--bg-input)' }} onClick={() => { setIsReady(!isReady); setShowMenuModal(false); }}>
+                <span className="fw-bold">{isReady ? '🟢 Trạng Thái: Đang Online' : '😴 Trạng Thái: Đang Offline'}</span>
+                <Badge bg={isReady ? 'success' : 'secondary'}>{isReady ? 'TẮT' : 'BẬT'}</Badge>
+              </ListGroup.Item>
+              <ListGroup.Item action className="d-flex justify-content-between align-items-center p-3 mb-2 rounded-3 text-white border-0" style={{ backgroundColor: 'var(--bg-input)' }} onClick={() => { setShowMenuModal(false); navigate('/wallet'); }}>
+                <span className="fw-bold">💳 Ví Tài Xế</span>
+                <span className="fw-bold text-success">{(userInfo?.balance || 500000).toLocaleString()}đ ➔</span>
+              </ListGroup.Item>
+              <ListGroup.Item action className="d-flex justify-content-between align-items-center p-3 mb-2 rounded-3 text-white border-0" style={{ backgroundColor: 'var(--bg-input)' }} onClick={() => { setShowMenuModal(false); setMainTab('my_trips'); setTripSubTab('history'); }}>
+                <span className="fw-bold">📜 Lịch Sử Đơn Hàng</span>
+                <span className="text-muted">➔</span>
+              </ListGroup.Item>
+              <ListGroup.Item action className="d-flex justify-content-between align-items-center p-3 mb-2 rounded-3 text-white border-0" style={{ backgroundColor: 'var(--bg-input)' }} onClick={() => { setShowMenuModal(false); setShowProfileModal(true); }}>
+                <span className="fw-bold">✏️ Chỉnh Sửa Hồ Sơ</span>
+                <span className="text-muted">➔</span>
+              </ListGroup.Item>
+              <ListGroup.Item action className="d-flex justify-content-between align-items-center p-3 rounded-3 text-danger fw-bold border-0" style={{ backgroundColor: 'rgba(255, 77, 77, 0.1)' }} onClick={() => { localStorage.removeItem('userInfo'); navigate('/login'); }}>
+                <span>🚪 Đăng Xuất</span>
+                <span>➔</span>
+              </ListGroup.Item>
+            </ListGroup>
+          </Modal.Body>
         </Modal>
-      </Container>
+
+        <Modal show={showProfileModal} onHide={() => setShowProfileModal(false)} centered contentClassName="logistics-card border-0">
+          <Modal.Header closeButton className="border-bottom" style={{ borderColor: 'var(--border-color)' }}>
+            <Modal.Title className="fw-bold text-white fs-5">✏️ Chỉnh Sửa Hồ Sơ Tài Xế</Modal.Title>
+          </Modal.Header>
+          <Form onSubmit={handleSaveProfile}>
+            <Modal.Body className="p-3">
+              <Form.Group className="mb-3">
+                <Form.Label className="text-muted fw-bold" style={{ fontSize: '12px' }}>HỌ VÀ TÊN TÀI XẾ</Form.Label>
+                <Form.Control type="text" className="logistics-input" value={profileData.name} onChange={(e) => setProfileData({ ...profileData, name: e.target.value })} required />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label className="text-muted fw-bold" style={{ fontSize: '12px' }}>SỐ ĐIỆN THOẠI SỬ DỤNG</Form.Label>
+                <Form.Control type="tel" className="logistics-input" value={profileData.phone} onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })} required />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label className="text-muted fw-bold" style={{ fontSize: '12px' }}>BIỂN SỐ XE ĐĂNG KÝ</Form.Label>
+                <Form.Control type="text" className="logistics-input text-uppercase" value={profileData.license_plate} onChange={(e) => setProfileData({ ...profileData, license_plate: e.target.value })} required />
+              </Form.Group>
+            </Modal.Body>
+            <Modal.Footer className="border-top" style={{ borderColor: 'var(--border-color)' }}>
+              <Button variant="outline-secondary" size="sm" onClick={() => setShowProfileModal(false)}>Hủy</Button>
+              <Button type="submit" size="sm" className="btn-orange px-3 fw-bold">Lưu Hồ Sơ</Button>
+            </Modal.Footer>
+          </Form>
+        </Modal>
+
+      </div>
     </Container>
   );
 }
